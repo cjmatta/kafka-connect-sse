@@ -1,0 +1,36 @@
+{
+  "bot": false,
+  "comment": "/* wbsetdescription-add:1|en */ Qing dynasty person CBDB = 56896, #quickstatements; [[:toollabs:quickstatements/#/batch/8857|batch #8857]] by [[User:Tagishsimon|]]",
+  "id": 910619087,
+  "length": {
+    "new": 2697,
+    "old": 2606
+  },
+  "meta": {
+    "domain": "www.wikidata.org",
+    "dt": "2019-03-04T13:30:32+00:00",
+    "id": "afa46939-3e81-11e9-bfb6-1866da99521a",
+    "request_id": "a30366d2-3ff6-4402-84c6-17aae8690056",
+    "schema_uri": "mediawiki/recentchange/2",
+    "topic": "eqiad.mediawiki.recentchange",
+    "uri": "https://www.wikidata.org/wiki/Q45553520",
+    "partition": 0,
+    "offset": 1429042371
+  },
+  "minor": false,
+  "namespace": 0,
+  "parsedcomment": "‎<span dir=\"auto\"><span class=\"autocomment\">Added [en] description: </span></span> Qing dynasty person CBDB = 56896, #quickstatements; <a href=\"https://tools.wmflabs.org/quickstatements/#.2Fbatch.2F8857\" class=\"extiw\" title=\"toollabs:quickstatements/\">batch #8857</a> by <a href=\"/wiki/User:Tagishsimon\" title=\"User:Tagishsimon\">User:Tagishsimon</a>",
+  "patrolled": true,
+  "revision": {
+    "new": 874176646,
+    "old": 850556419
+  },
+  "server_name": "www.wikidata.org",
+  "server_script_path": "/w",
+  "server_url": "https://www.wikidata.org",
+  "timestamp": 1551706232,
+  "title": "Q45553520",
+  "type": "edit",
+  "user": "Tagishsimon",
+  "wiki": "wikidatawiki"
+}

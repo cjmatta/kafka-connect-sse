@@ -1,0 +1,131 @@
+{
+    "name": "com.github.cjmatta.wikipedia.RecentChange",
+    "type": "STRUCT",
+    "isOptional": false,
+    "fieldSchemas": {
+        "id": {
+            "type": "INT64",
+            "isOptional": false
+        },
+        "bot": {
+            "type": "BOOLEAN",
+            "isOptional": false
+        },
+        "comment": {
+            "type": "STRING",
+            "iOptional": false
+        },
+        "length": {
+            "type": "STRUCT",
+            "isOptional": false,
+            "fieldSchemas": {
+                "new": {
+                    "type": "INT64",
+                    "isOptional": false
+                },
+                "old": {
+                    "type": "INT64",
+                    "isOptional": false
+                }
+            }
+        },
+        "meta": {
+            "type": "STRUCT",
+            "isOptional": false,
+            "fieldSchemas": {
+                "domain": {
+                    "type": "STRING",
+                    "isOptional": false
+                },
+                "dt": {
+                    "name": "org.apache.kafka.connect.data.Timestamp",
+                    "type": "INT64",
+                    "version": 1,
+                    "isOptional": false
+                },
+                "request_id": {
+                    "type": "STRING",
+                    "isOptional": false
+                },
+                "schema_uri": {
+                    "type": "STRING",
+                    "isOptional": false
+                },
+                "topic": {
+                    "type": "STRING",
+                    "isOptional": false
+                },
+                "uri": {
+                    "type": "STRING",
+                    "isOptional": false
+                },
+                "partition": {
+                    "type": "INT",
+                    "isOptional": false
+                },
+                "offset": {
+                    "type": "INT64",
+                    "isOptional": false
+                }
+            }
+        },
+        "minor": {
+            "type": "BOOLEAN",
+            "isOptional": false
+        },
+        "namespace": {
+            "type": "INT",
+            "isOptional": false
+        },
+        "parsedComment": {
+            "type": "STRING",
+            "isOptional": false
+        },
+        "patrolled": {
+            "type": "BOOLEAN",
+            "isOptional": false
+        },
+        "revision": {
+            "new": {
+                "type": "INT64",
+                "isOptional": false
+            },
+            "old": { 
+                "type": "INT64",
+                "isOptional": false
+            }
+        },
+        "server_name": {
+            "type": "STRING",
+            "isOptional": false
+        },
+        "server_script_path": {
+            "type": "STRING",
+            "isOptional": false
+        },
+        "server_url": {
+            "type": "STRING",
+            "isOptional": false
+        },
+        "timestamp": {
+            "type": "INT64",
+            "isOptional": false
+        },
+        "title": {
+            "type": "STRING",
+            "isOptional": false
+        },
+        "type": {
+            "type": "STRING",
+            "isOptional": false
+        },
+        "user": {
+            "type": "STRING",
+            "isOptional": false
+        },
+        "wiki": {
+            "type": "STRING",
+            "isOptional": false
+        }
+    }
+}
