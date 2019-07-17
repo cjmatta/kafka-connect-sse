@@ -25,7 +25,8 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import java.util.Map;
 
 public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
-
+//  TODO: Add support for URL parameters
+//  TODO: Add support for event type filtering
   public static final String SSE_URI = "sse.uri";
   private static final String SSE_URI_DOC = "URI for the SSE stream";
   public static final String TOPIC = "topic";
