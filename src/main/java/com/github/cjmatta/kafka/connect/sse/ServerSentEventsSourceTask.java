@@ -16,16 +16,14 @@
 
 package com.github.cjmatta.kafka.connect.sse;
 
+import com.github.jcustenborder.kafka.connect.utils.VersionUtil;
 import com.launchdarkly.eventsource.MessageEvent;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-import com.github.jcustenborder.kafka.connect.utils.VersionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.sse.InboundSseEvent;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
