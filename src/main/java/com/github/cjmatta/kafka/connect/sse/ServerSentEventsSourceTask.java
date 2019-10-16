@@ -16,6 +16,8 @@
 
 package com.github.cjmatta.kafka.connect.sse;
 
+import com.launchdarkly.eventsource.MessageEvent;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import com.github.jcustenborder.kafka.connect.utils.VersionUtil;
@@ -45,27 +47,28 @@ public class ServerSentEventsSourceTask extends SourceTask {
   public void start(Map<String, String> map) {
     log.info("Starting Server Sent Events Source Task");
     config = new ServerSentEventsSourceConnectorConfig(map);
-    client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI));
+
     try {
+      client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI));
       client.start();
-    } catch (IOException e) {
-      e.printStackTrace();
+    } catch (Exception e) {
+      throw new ConnectException("The SSE client failed to start", e);
     }
   }
 
   @Override
   public List<SourceRecord> poll() throws InterruptedException {
-    List<InboundSseEvent> sseEvents = client.getRecords();
+    List<MessageEvent> sseEvents = client.getRecords();
     List<SourceRecord> records = new LinkedList<>();
 
-    for (InboundSseEvent event : sseEvents) {
+    for (MessageEvent event : sseEvents) {
       records.add(createSourceRecordFromSseEvent(event));
     }
 
     return records;
   }
 
-  private SourceRecord createSourceRecordFromSseEvent(InboundSseEvent event) {
+  private SourceRecord createSourceRecordFromSseEvent(MessageEvent event) {
     Map<String, ?> srcOffset = Collections.emptyMap();
     Map<String, ?> srcPartition = Collections.emptyMap();
 
@@ -73,9 +76,8 @@ public class ServerSentEventsSourceTask extends SourceTask {
 
 
     ServerSentEvent serverSentEvent = new ServerSentEvent(
-        event.getName(),
-        event.getId(),
-        event.readData()
+        event.getLastEventId(),
+        event.getData()
     );
 
     return new SourceRecord(

@@ -16,40 +16,13 @@
 
 package com.github.cjmatta.kafka.connect;
 
-import com.github.cjmatta.kafka.connect.sse.ServerSentEventClient;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import javax.ws.rs.sse.InboundSseEvent;
-import java.io.IOException;
-import java.util.LinkedList;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
-
-class ServerSentEventClientTest {
-  private ServerSentEventClient client;
-
-  @BeforeEach
-  void setUp() throws IOException {
-    String WIKIPEDIA_SSE_STREAM = "https://stream.wikimedia.org/v2/stream/recentchange";
-    this.client = new ServerSentEventClient(WIKIPEDIA_SSE_STREAM);
-    this.client.start();
-  }
-
-  @AfterEach
-  void tearDown() {
-    this.client.stop();
-  }
+public class ServerSentEventClientTest {
 
   @Test
-  void getRecords() throws InterruptedException {
-    List<InboundSseEvent> records = new LinkedList<>();
-    Thread.sleep(2000);
-    records = this.client.getRecords();
-
-    assertFalse(records.isEmpty());
+  public void testClent(){
 
   }
+
 }

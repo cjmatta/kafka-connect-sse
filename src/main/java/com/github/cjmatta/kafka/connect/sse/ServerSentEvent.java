@@ -22,29 +22,25 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 
 public class ServerSentEvent extends Struct {
-  public static final String EVENT = "event";
   public static final String ID = "id";
   public static final String DATA = "data";
 
   final public static Schema SCHEMA = SchemaBuilder.struct()
       .name("com.github.cjmatta.kafka.connect.sse.ServerSentEvent")
       .doc("Server Sent Event Message")
-      .field(EVENT, SchemaBuilder.string().doc("The event class of this event").required().build())
       .field(ID, SchemaBuilder.string().doc("The event ID").optional().build())
       .field(DATA, SchemaBuilder.string().doc("The event data payload").required().build());
 
-  public ServerSentEvent(String event, String id, String data) {
+  public ServerSentEvent(String id, String data) {
     super(SCHEMA);
     this
-      .put(EVENT, event)
       .put(ID, id)
       .put(DATA, data);
   }
 
   @Override
   public String toString() {
-    return String.format("[event]=%s [id]=%s [data]=%s",
-      this.get(EVENT),
+    return String.format("[id]=%s [data]=%s",
       this.get(ID),
       this.get(DATA)
     );
