@@ -5,3 +5,11 @@ This is a Kafka Connect source connector supporting the [Server Sent Events Stan
 
 ## Configuration
 
+Configuration Parameter | Description | Required
+-------------- | ---------- | --------- |
+sse.uri | URI for the SSE stream | yes
+topic | Topic to send events to | yes
+
+
+ToDo:
+- [ ] Support for basic auth
