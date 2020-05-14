@@ -44,10 +44,19 @@ public class ServerSentEventsSourceTask extends SourceTask {
   @Override
   public void start(Map<String, String> map) {
     log.info("Starting Server Sent Events Source Task");
-    config = new ServerSentEventsSourceConnectorConfig(map);
+    this.config = new ServerSentEventsSourceConnectorConfig(map);
 
     try {
-      client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI));
+//      HTTP Basic Auth
+      if (this.config.httpBasicAuth) {
+        client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI),
+          this.config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_USERNAME),
+          this.config.getPassword(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_PASSWORD)
+        );
+//        No Auth
+      } else {
+        client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI));
+      }
       client.start();
     } catch (Exception e) {
       throw new ConnectException("The SSE client failed to start", e);

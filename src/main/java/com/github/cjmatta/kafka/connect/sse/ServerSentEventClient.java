@@ -19,9 +19,18 @@ package com.github.cjmatta.kafka.connect.sse;
 import com.launchdarkly.eventsource.EventHandler;
 import com.launchdarkly.eventsource.EventSource;
 import com.launchdarkly.eventsource.MessageEvent;
+
+import okhttp3.Authenticator;
+import okhttp3.Credentials;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.Route;
+import org.apache.kafka.common.config.types.Password;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.URI;
@@ -35,7 +44,7 @@ import java.util.concurrent.TimeUnit;
 public class ServerSentEventClient implements EventHandler {
   private static final Logger log = LoggerFactory.getLogger(ServerSentEventClient.class);
 
-  private BlockingQueue<MessageEvent> queue;
+  private BlockingQueue<MessageEvent> queue = new LinkedBlockingDeque<>();
   private EventSource eventSource;
   private URI uri;
 
@@ -44,12 +53,34 @@ public class ServerSentEventClient implements EventHandler {
       uri = new URI(url);
       EventSource.Builder builder = new EventSource.Builder(this, uri);
       eventSource = builder.build();
-      queue = new LinkedBlockingDeque<>();
-
     } catch (URISyntaxException e) {
       throw new ConnectException("Bad URI: " + e.getMessage());
     }
+  }
 
+  public ServerSentEventClient(String url, String username, Password password) throws Exception {
+    try {
+      uri = new URI(url);
+      EventSource.Builder builder = new EventSource.Builder(this, uri);
+      final OkHttpClient client = new OkHttpClient.Builder().authenticator(new Authenticator() {
+        @Nullable
+        @Override
+        public Request authenticate(Route route, Response response) throws IOException {
+          if (response.request().header("Authorization") != null) {
+            return null; // Give up, we've already failed to authenticate.
+          }
+          String credential = Credentials.basic(username, password.toString());
+          return response.request().newBuilder()
+            .header("Authorization", credential)
+            .build();
+        }
+        }).build();
+
+      builder.client(client);
+      eventSource = builder.build();
+    } catch (Exception e) {
+      throw new ConnectException("Exception creating client: " + e.getMessage());
+    }
   }
 
   public void start() throws IOException {

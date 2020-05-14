@@ -16,13 +16,40 @@
 
 package com.github.cjmatta.kafka.connect;
 
+import com.github.cjmatta.kafka.connect.sse.ServerSentEventClient;
+import com.launchdarkly.eventsource.MessageEvent;
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.SocketPolicy;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.List;
 
 public class ServerSentEventClientTest {
+  private static final int CHUNK_SIZE = 5;
 
   @Test
-  public void testClent(){
+  public void testSchemalessClient() throws Exception {
+    String body = "data: {\"key\": 1, \"value\": \"a\"}\n\n";
 
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(createEventsResponse(body, SocketPolicy.KEEP_OPEN));
+      server.start();
+
+      ServerSentEventClient client = new ServerSentEventClient(server.url("/").toString());
+      client.start();
+      List<MessageEvent> records = client.getRecords();
+      assertTrue(records.size() > 0);
+      assertEquals("{\"key\": 1, \"value\": \"a\"}", records.get(0).getData());
+    }
+  }
+
+  private MockResponse createEventsResponse(String body, SocketPolicy socketPolicy) {
+    return new MockResponse()
+      .setHeader("Content-Type", "text/event-stream")
+      .setChunkedBody(body, CHUNK_SIZE)
+      .setSocketPolicy(socketPolicy);
   }
 
 }

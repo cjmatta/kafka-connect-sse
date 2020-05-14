@@ -5,14 +5,25 @@
 
     <groupId>com.github.cjmatta.kafka.connect</groupId>
     <artifactId>kafka-connect-sse</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
 
     <dependencies>
+        <dependency>
+            <groupId>com.github.jcustenborder.kafka.connect</groupId>
+            <artifactId>connect-utils</artifactId>
+            <version>0.4.162</version>
+        </dependency>
        <dependency>
            <groupId>com.launchdarkly</groupId>
            <artifactId>okhttp-eventsource</artifactId>
            <version>1.8.0</version>
        </dependency>
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>mockwebserver</artifactId>
+            <version>3.10.0</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     <packaging>jar</packaging>
 
@@ -22,7 +33,7 @@
     <parent>
         <groupId>com.github.jcustenborder.kafka.connect</groupId>
         <artifactId>kafka-connect-parent</artifactId>
-        <version>2.2.1-cp1</version>
+        <version>2.4.0</version>
     </parent>
 
     <scm>
@@ -38,80 +49,35 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.0.2</version>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
-                            <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
-                        </manifest>
-                    </archive>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.6.2</version>
-                <inherited>true</inherited>
-                <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.1.0</version>
-                <configuration>
-                    <descriptors>
-                        <descriptor>src/main/assembly/package.xml</descriptor>
-                    </descriptors>
-                </configuration>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-maven-plugin</artifactId>
+                <version>0.11.1</version>
                 <executions>
                     <execution>
-                        <id>make-assembly</id>
-                        <phase>package</phase>
+                        <id>hub</id>
                         <goals>
-                            <goal>single</goal>
+                            <goal>kafka-connect</goal>
                         </goals>
+                        <configuration>
+                            <title>Kafka Connect SSE</title>
+                            <documentationUrl>https://github.com/cjmatta/kafka-connect-sse/blob/master/README.md</documentationUrl>
+                            <description>A Kafka Connect source connector for Server Sent Events</description>
+
+                            <ownerUsername>cjmatta</ownerUsername>
+                            <ownerType>user</ownerType>
+                            <ownerName>Christopher Matta</ownerName>
+                            <ownerUrl>https://github.com/cjmatta</ownerUrl>
+                            <componentTypes>
+                                <componentType>source</componentType>
+                            </componentTypes>
+                            <tags>
+                                <tag>SSE</tag>
+                                <tag>Server Sent Events</tag>
+                            </tags>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
-            <!--<plugin>-->
-                <!--<groupId>io.confluent</groupId>-->
-                <!--<artifactId>kafka-connect-maven-plugin</artifactId>-->
-                <!--<version>0.11.1</version>-->
-                <!--<executions>-->
-                    <!--<execution>-->
-                        <!--<goals>-->
-                            <!--<goal>kafka-connect</goal>-->
-                        <!--</goals>-->
-                        <!--<configuration>-->
-                            <!--<title>Kafka Connect SSE</title>-->
-                            <!--<documentationUrl>https://github.com/cjmatta/kafka-connect-sse/blob/master/README.md</documentationUrl>-->
-                            <!--<description>A Kafka Connect source connector for Server Sent Events</description>-->
-
-                            <!--<ownerUsername>cjmatta</ownerUsername>-->
-                            <!--<ownerType>user</ownerType>-->
-                            <!--<ownerName>Christopher Matta</ownerName>-->
-                            <!--<ownerUrl>https://github.com/cjmatta</ownerUrl>-->
-                            <!--<componentTypes>-->
-                                <!--<componentType>source</componentType>-->
-                            <!--</componentTypes>-->
-                            <!--<tags>-->
-                                <!--<tag>SSE</tag>-->
-                                <!--<tag>Server Sent Events</tag>-->
-                            <!--</tags>-->
-
-                            <!--<confluentControlCenterIntegration>true</confluentControlCenterIntegration>-->
-
-                            <!--<singleMessageTransforms>true</singleMessageTransforms>-->
-                        <!--</configuration>-->
-                    <!--</execution>-->
-                <!--</executions>-->
-            <!--</plugin>-->
         </plugins>
         <resources>
             <resource>
