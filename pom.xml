@@ -62,11 +62,13 @@
                             <title>Kafka Connect SSE</title>
                             <documentationUrl>https://github.com/cjmatta/kafka-connect-sse/blob/master/README.md</documentationUrl>
                             <description>A Kafka Connect source connector for Server Sent Events</description>
-
                             <ownerUsername>cjmatta</ownerUsername>
                             <ownerType>user</ownerType>
                             <ownerName>Christopher Matta</ownerName>
                             <ownerUrl>https://github.com/cjmatta</ownerUrl>
+                            <supportUrl>https://github.com/cjmatta/kafka-connect-sse/issues</supportUrl>
+                            <supportSummary>Support provided through community involvement.</supportSummary>
+                            <logo>assets/HTML5_Badge_256.png</logo>
                             <componentTypes>
                                 <componentType>source</componentType>
                             </componentTypes>
@@ -74,6 +76,9 @@
                                 <tag>SSE</tag>
                                 <tag>Server Sent Events</tag>
                             </tags>
+                            <excludes>
+                                <exclude>org.reflections:reflections</exclude>
+                            </excludes>
                         </configuration>
                     </execution>
                 </executions>
