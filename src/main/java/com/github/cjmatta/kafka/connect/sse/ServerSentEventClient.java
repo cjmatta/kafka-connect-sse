@@ -69,7 +69,7 @@ public class ServerSentEventClient implements EventHandler {
           if (response.request().header("Authorization") != null) {
             return null; // Give up, we've already failed to authenticate.
           }
-          String credential = Credentials.basic(username, password.toString());
+          String credential = Credentials.basic(username, password.value());
           return response.request().newBuilder()
             .header("Authorization", credential)
             .build();
