@@ -24,6 +24,7 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.sse.InboundSseEvent;
 import javax.ws.rs.sse.SseEventSource;
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
@@ -31,17 +32,26 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 
-public class ServerSentEventClient {
+public class ServerSentEventClient implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(ServerSentEventClient.class);
 
-  private WebTarget source;
-  private BlockingQueue<InboundSseEvent> queue;
+  private final Client client;
+  private final WebTarget source;
+  private final BlockingQueue<InboundSseEvent> queue;
   private SseEventSource sse;
 
   public ServerSentEventClient(String url) {
-    Client client = ClientBuilder.newClient();
+    this.client = ClientBuilder.newClient();
     this.source = client.target(url);
     queue = new LinkedBlockingDeque<>();
+  }
+
+  // New constructor for testing
+  ServerSentEventClient(Client client, WebTarget source, SseEventSource sse) {
+    this.client = client;
+    this.source = source;
+    this.queue = new LinkedBlockingDeque<>();
+    this.sse = sse;
   }
 
   public void start() throws IOException {
@@ -51,7 +61,7 @@ public class ServerSentEventClient {
         .reconnectingEvery(2, TimeUnit.SECONDS)
         .build();
 
-      sse.register(this::onMessage);
+      sse.register(this::onMessage, this::onError);
       log.debug("Opening SSE client.");
       sse.open();
     } catch (Exception e) {
@@ -63,6 +73,17 @@ public class ServerSentEventClient {
     log.debug("Closing SSE client.");
     this.sse.close();
   }
+
+  @Override
+  public void close() {
+    client.close();
+  }
+
+  // New method for testing
+  BlockingQueue<InboundSseEvent> getQueueForTesting() {
+    return queue;
+  }
+
 
   public List<InboundSseEvent> getRecords() throws InterruptedException {
     List<InboundSseEvent> records = new LinkedList<>();
@@ -87,5 +108,9 @@ public class ServerSentEventClient {
     log.debug("got event with EVENT: " + event.getName());
     log.debug("got event with DATA: " + event.readData());
     this.queue.add(event);
+  }
+
+  private void onError(Throwable error) {
+    log.error("Error while processing SSE event", error);
   }
 }

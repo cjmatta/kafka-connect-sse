@@ -35,10 +35,9 @@ public class ServerSentEvent extends Struct {
 
   public ServerSentEvent(String event, String id, String data) {
     super(SCHEMA);
-    this
-      .put(EVENT, event)
-      .put(ID, id)
-      .put(DATA, data);
+    this.put(EVENT, event)
+        .put(ID, id)
+        .put(DATA, data);
   }
 
   @Override
