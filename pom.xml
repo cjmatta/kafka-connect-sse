@@ -5,50 +5,88 @@
 
     <groupId>com.github.cjmatta.kafka.connect</groupId>
     <artifactId>kafka-connect-sse</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.1</version>
+    <parent>
+        <groupId>com.github.jcustenborder.kafka.connect</groupId>
+        <artifactId>kafka-connect-parent</artifactId>
+        <version>3.3.1-1</version>
+    </parent>
+
+    <properties>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+        <kafka.version>3.3.2</kafka.version>
+    </properties>
+    <repositories>
+        <repository>
+            <id>confluent</id>
+            <name>Confluent</name>
+            <url>https://packages.confluent.io/maven/</url>
+        </repository>
+    </repositories>
+    <pluginRepositories>
+        <pluginRepository>
+            <id>confluent</id>
+            <name>Confluent</name>
+            <url>https://packages.confluent.io/maven/</url>
+        </pluginRepository>
+    </pluginRepositories>
+
     <dependencies>
         <dependency>
-            <groupId>javax.ws.rs</groupId>
-            <artifactId>javax.ws.rs-api</artifactId>
-            <version>2.1.1</version>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>connect-api</artifactId>
+            <scope>provided</scope>
+            <version>${kafka.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.glassfish.jersey.media</groupId>
-            <artifactId>jersey-media-sse</artifactId>
-            <version>2.28</version>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>connect-runtime</artifactId>
+            <version>${kafka.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.11.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.jcustenborder.kafka.connect</groupId>
+            <artifactId>connect-utils</artifactId>
+            <version>0.4.164</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.core</groupId>
-            <artifactId>jersey-client</artifactId>
-            <version>2.28</version>
+            <artifactId>jersey-common</artifactId>
+            <version>2.34</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.inject</groupId>
             <artifactId>jersey-hk2</artifactId>
-            <version>2.28</version>
+            <version>2.34</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jersey.media</groupId>
+            <artifactId>jersey-media-sse</artifactId>
+            <version>2.34</version>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
-            <artifactId>mockito-all</artifactId>
-            <version>1.10.19</version>
+            <artifactId>mockito-inline</artifactId>
+            <version>4.2.0</version>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
     <packaging>jar</packaging>
 
     <name>kafka-connect-sse</name>
-    <description>A Kafka Connect Connector for capturing Server Sent Events</description>
-
-    <parent>
-        <groupId>com.github.jcustenborder.kafka.connect</groupId>
-        <artifactId>kafka-connect-parent</artifactId>
-        <version>2.2.1-cp1</version>
-    </parent>
+    <description>A Kafka Connect Source Connector for capturing Server Sent Events</description>
 
     <scm>
         <connection>scm:git:https://github.com/cjmatta/kafka-connect-sse.git</connection>
         <developerConnection>scm:git:git@github.com:cjmatta/kafka-connect-sse.git</developerConnection>
-        <url></url>
+        <url>https://github.com/cjmatta/kafka-connect-sse</url>
     </scm>
     <issueManagement>
         <system>github</system>
@@ -59,79 +97,81 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.0.2</version>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
-                            <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
-                        </manifest>
-                    </archive>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.6.2</version>
-                <inherited>true</inherited>
-                <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.1.0</version>
-                <configuration>
-                    <descriptors>
-                        <descriptor>src/main/assembly/package.xml</descriptor>
-                    </descriptors>
-                </configuration>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.2.1</version>
                 <executions>
                     <execution>
-                        <id>make-assembly</id>
                         <phase>package</phase>
                         <goals>
-                            <goal>single</goal>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <excludes>
+                                    <exclude>org.glassfish.jersey.inject</exclude>
+                                    <exclude>org.glassfish.jersey.core</exclude>
+                                    <exclude>org.glassfish.jersey.connectors</exclude>
+                                </excludes>
+                            </artifactSet>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <source>8</source>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>2.20.1</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
                         </goals>
                     </execution>
                 </executions>
             </plugin>
-            <!--<plugin>-->
-                <!--<groupId>io.confluent</groupId>-->
-                <!--<artifactId>kafka-connect-maven-plugin</artifactId>-->
-                <!--<version>0.11.1</version>-->
-                <!--<executions>-->
-                    <!--<execution>-->
-                        <!--<goals>-->
-                            <!--<goal>kafka-connect</goal>-->
-                        <!--</goals>-->
-                        <!--<configuration>-->
-                            <!--<title>Kafka Connect SSE</title>-->
-                            <!--<documentationUrl>https://github.com/cjmatta/kafka-connect-sse/blob/master/README.md</documentationUrl>-->
-                            <!--<description>A Kafka Connect source connector for Server Sent Events</description>-->
-
-                            <!--<ownerUsername>cjmatta</ownerUsername>-->
-                            <!--<ownerType>user</ownerType>-->
-                            <!--<ownerName>Christopher Matta</ownerName>-->
-                            <!--<ownerUrl>https://github.com/cjmatta</ownerUrl>-->
-                            <!--<componentTypes>-->
-                                <!--<componentType>source</componentType>-->
-                            <!--</componentTypes>-->
-                            <!--<tags>-->
-                                <!--<tag>SSE</tag>-->
-                                <!--<tag>Server Sent Events</tag>-->
-                            <!--</tags>-->
-
-                            <!--<confluentControlCenterIntegration>true</confluentControlCenterIntegration>-->
-
-                            <!--<singleMessageTransforms>true</singleMessageTransforms>-->
-                        <!--</configuration>-->
-                    <!--</execution>-->
-                <!--</executions>-->
-            <!--</plugin>-->
+            <plugin>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-connect-maven-plugin</artifactId>
+                <version>0.11.3</version>
+                <executions>
+                    <execution>
+                        <id>hub</id>
+                        <goals>
+                            <goal>kafka-connect</goal>
+                        </goals>
+                        <configuration>
+                            <title>Kafka Connect SSE</title>
+                            <documentationUrl>https://github.com/cjmatta/kafka-connect-sse/blob/master/README.md</documentationUrl>
+                            <description>A Kafka Connect source connector for Server Sent Events</description>
+                            <ownerUsername>cjmatta</ownerUsername>
+                            <ownerType>user</ownerType>
+                            <ownerName>Christopher Matta</ownerName>
+                            <ownerUrl>https://github.com/cjmatta</ownerUrl>
+                            <supportUrl>https://github.com/cjmatta/kafka-connect-sse/issues</supportUrl>
+                            <supportSummary>Support provided through community involvement.</supportSummary>
+                            <logo>assets/HTML5_Badge_256.png</logo>
+                            <componentTypes>
+                                <componentType>source</componentType>
+                            </componentTypes>
+                            <tags>
+                                <tag>SSE</tag>
+                                <tag>Server Sent Events</tag>
+                            </tags>
+                            <excludes>
+                                <exclude>org.reflections:reflections</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
         <resources>
             <resource>
