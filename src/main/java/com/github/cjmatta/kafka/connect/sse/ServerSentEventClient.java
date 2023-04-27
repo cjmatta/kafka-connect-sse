@@ -40,10 +40,14 @@ public class ServerSentEventClient implements Closeable {
   private final BlockingQueue<InboundSseEvent> queue;
   private SseEventSource sse;
 
+  private volatile Throwable error;
+
   public ServerSentEventClient(String url) {
+    log.debug("SSE Client initializing");
     this.client = ClientBuilder.newClient();
     this.source = client.target(url);
     queue = new LinkedBlockingDeque<>();
+    log.debug("SSE Client initialized");
   }
 
   // New constructor for testing
@@ -86,6 +90,10 @@ public class ServerSentEventClient implements Closeable {
 
 
   public List<InboundSseEvent> getRecords() throws InterruptedException {
+    if (hasError()) {
+      closeResources();
+      throw new IllegalStateException("Error occurred while processing SSE events", error);
+    }
     List<InboundSseEvent> records = new LinkedList<>();
 
     InboundSseEvent event = this.queue.poll(1L, TimeUnit.SECONDS);
@@ -112,5 +120,16 @@ public class ServerSentEventClient implements Closeable {
 
   private void onError(Throwable error) {
     log.error("Error while processing SSE event", error);
+    this.error = error;
+  }
+
+  private boolean hasError() {
+    return error != null;
+  }
+
+  private void closeResources() {
+    log.debug("Closing resources due to error.");
+    stop();
+    close();
   }
 }
