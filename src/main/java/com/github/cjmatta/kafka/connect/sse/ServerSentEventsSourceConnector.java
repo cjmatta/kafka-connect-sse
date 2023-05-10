@@ -16,13 +16,8 @@
 
 package com.github.cjmatta.kafka.connect.sse;
 
-import java.util.List;
-import java.util.Map;
-
+import com.github.jcustenborder.kafka.connect.utils.VersionUtil;
 import com.github.jcustenborder.kafka.connect.utils.config.Description;
-import com.github.jcustenborder.kafka.connect.utils.config.DocumentationImportant;
-import com.github.jcustenborder.kafka.connect.utils.config.DocumentationNote;
-import com.github.jcustenborder.kafka.connect.utils.config.DocumentationTip;
 import com.github.jcustenborder.kafka.connect.utils.config.TaskConfigs;
 import com.github.jcustenborder.kafka.connect.utils.config.Title;
 import org.apache.kafka.common.config.ConfigDef;
@@ -31,13 +26,11 @@ import org.apache.kafka.connect.source.SourceConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.jcustenborder.kafka.connect.utils.VersionUtil;
+import java.util.List;
+import java.util.Map;
 
 @Description("Kafka Connect source connector for Server Sent Events")
-@DocumentationImportant("This is a important information that will show up in the documentation.")
-@DocumentationTip("This is a tip that will show up in the documentation.")
 @Title("Kafka Connect Server Sent Events") //This is the display name that will show up in the documentation.
-@DocumentationNote("This is a note that will show up in the documentation")
 public class ServerSentEventsSourceConnector extends SourceConnector {
   /*
     Your connector should never use System.out for logging. All of your classes should use slf4j
