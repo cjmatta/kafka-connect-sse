@@ -13,17 +13,18 @@
  */
 package com.github.cjmatta.kafka.connect.sse;
 
-import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.Invocation;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.sse.InboundSseEvent;
 import javax.ws.rs.sse.SseEventSource;
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Base64;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -37,6 +38,10 @@ public class ServerSentEventClient implements Closeable {
   private final WebTarget source;
   private final BlockingQueue<InboundSseEvent> queue;
   private SseEventSource sse;
+  
+  // Store username and password for authentication if provided
+  private final String username;
+  private final String password;
 
   private volatile Throwable error;
 
@@ -44,6 +49,8 @@ public class ServerSentEventClient implements Closeable {
     log.debug("SSE Client initializing");
     this.client = ClientBuilder.newClient();
     this.source = client.target(url);
+    this.username = null;
+    this.password = null;
     queue = new LinkedBlockingDeque<>();
     log.debug("SSE Client initialized");
   }
@@ -53,7 +60,8 @@ public class ServerSentEventClient implements Closeable {
     log.debug("SSE Client initializing");
     this.client = ClientBuilder.newClient();
     this.source = client.target(url);
-    this.source.register(HttpAuthenticationFeature.basic(username, password));
+    this.username = username;
+    this.password = password;
     queue = new LinkedBlockingDeque<>();
     log.debug("SSE Client initialized");
   }
@@ -63,7 +71,8 @@ public class ServerSentEventClient implements Closeable {
     log.debug("SSE Client initializing");
     this.client = client;
     this.source = source;
-    this.source.register(HttpAuthenticationFeature.basic(username, password));
+    this.username = username;
+    this.password = password;
     this.queue = new LinkedBlockingDeque<>();
     this.sse = sse;
     log.debug("SSE Client initialized");
@@ -72,6 +81,17 @@ public class ServerSentEventClient implements Closeable {
 
   public void start() throws IOException {
     try {
+      Invocation.Builder builder = this.source.request();
+      
+      // Apply basic authentication if credentials are provided
+      if (username != null && password != null) {
+        String auth = username + ":" + password;
+        String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
+        String authHeader = "Basic " + encodedAuth;
+        builder.header("Authorization", authHeader);
+        log.debug("Added Basic Authentication header");
+      }
+      
       sse = SseEventSource
         .target(this.source)
         .reconnectingEvery(2, TimeUnit.SECONDS)
