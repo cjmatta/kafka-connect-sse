@@ -45,7 +45,14 @@ public class ServerSentEventsSourceTask extends SourceTask {
   public void start(Map<String, String> map) {
     log.info("Starting Server Sent Events Source Task");
     config = new ServerSentEventsSourceConnectorConfig(map);
-    client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI));
+    if(config.httpBasicAuth) {
+      client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI),
+          config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_USERNAME),
+          config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_PASSWORD));
+    } else {
+      client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI));
+    }
+
     try {
       client.start();
     } catch (IOException e) {

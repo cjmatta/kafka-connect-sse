@@ -8,10 +8,12 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import javax.ws.rs.client.Client;
+import javax.ws.rs.client.Invocation;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.sse.InboundSseEvent;
 import javax.ws.rs.sse.SseEventSource;
 import java.io.IOException;
+import java.util.Base64;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -25,6 +27,7 @@ public class ServerSentEventClientTest {
   private SseEventSource.Builder sseEventSourceBuilder;
   private ServerSentEventClient sseClient;
   private MockedStatic<SseEventSource> mockedSseEventSource;
+  private Invocation.Builder invocationBuilder;
 
   @BeforeEach
   public void setUp() {
@@ -32,15 +35,18 @@ public class ServerSentEventClientTest {
     webTarget = mock(WebTarget.class);
     sseEventSource = mock(SseEventSource.class);
     sseEventSourceBuilder = mock(SseEventSource.Builder.class);
-
+    invocationBuilder = mock(Invocation.Builder.class);
     mockedSseEventSource = Mockito.mockStatic(SseEventSource.class);
 
     when(client.target(anyString())).thenReturn(webTarget);
+    when(webTarget.request()).thenReturn(invocationBuilder);
+    when(invocationBuilder.header(anyString(), anyString())).thenReturn(invocationBuilder);
+    when(invocationBuilder.accept(anyString())).thenReturn(invocationBuilder);
     when(SseEventSource.target(webTarget)).thenReturn(sseEventSourceBuilder); // Mocking static method
     when(sseEventSourceBuilder.reconnectingEvery(anyLong(), any())).thenReturn(sseEventSourceBuilder);
     when(sseEventSourceBuilder.build()).thenReturn(sseEventSource);
 
-    sseClient = new ServerSentEventClient(client, webTarget, sseEventSource);
+    sseClient = new ServerSentEventClient(client, webTarget, sseEventSource, "username", "password");
   }
   @AfterEach
   public void tearDown() {
@@ -58,6 +64,14 @@ public class ServerSentEventClientTest {
   public void testStop() {
     sseClient.stop();
     verify(sseEventSource).close();
+  }
+
+  @Test
+  public void testBasicAuth() throws Exception {
+    sseClient.start();
+
+    String expectedHeader = "Basic " + Base64.getEncoder().encodeToString("username:password".getBytes());
+    verify(invocationBuilder).header("Authorization", expectedHeader);
   }
 
   @Test

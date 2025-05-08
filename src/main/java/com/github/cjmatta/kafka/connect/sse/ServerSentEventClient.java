@@ -1,12 +1,9 @@
 /**
  * Copyright © 2019 Christopher Matta (chris.matta@gmail.com)
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
  * http://www.apache.org/licenses/LICENSE-2.0
- *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,6 +13,7 @@
  */
 package com.github.cjmatta.kafka.connect.sse;
 
+import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,13 +48,27 @@ public class ServerSentEventClient implements Closeable {
     log.debug("SSE Client initialized");
   }
 
+  // constructor to support basic auth
+  ServerSentEventClient(String url, String username, String password) {
+    log.debug("SSE Client initializing");
+    this.client = ClientBuilder.newClient();
+    this.source = client.target(url);
+    this.source.register(HttpAuthenticationFeature.basic(username, password));
+    queue = new LinkedBlockingDeque<>();
+    log.debug("SSE Client initialized");
+  }
+
   // New constructor for testing
-  ServerSentEventClient(Client client, WebTarget source, SseEventSource sse) {
+  ServerSentEventClient(Client client, WebTarget source, SseEventSource sse, String username, String password) {
+    log.debug("SSE Client initializing");
     this.client = client;
     this.source = source;
+    this.source.register(HttpAuthenticationFeature.basic(username, password));
     this.queue = new LinkedBlockingDeque<>();
     this.sse = sse;
+    log.debug("SSE Client initialized");
   }
+
 
   public void start() throws IOException {
     try {
