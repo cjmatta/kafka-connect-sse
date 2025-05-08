@@ -205,12 +205,120 @@ public class ServerSentEventClient implements Closeable {
   }
 
   /**
+   * Gets a summary of the client's current status for monitoring purposes.
+   * This provides a snapshot of the client state including connection status,
+   * event counts, and timing information.
+   *
+   * @return A string containing the status summary
+   */
+  public String getStatusSummary() {
+    StringBuilder statusBuilder = new StringBuilder();
+    statusBuilder.append("SSE Client Status: ")
+                 .append("State=").append(connectionState)
+                 .append(", URL=").append(source.getUri())
+                 .append(", Events=").append(totalEventsReceived.get())
+                 .append(", QueueSize=").append(queue.size())
+                 .append(", LastEventAge=").append(getTimeSinceLastEvent()).append("ms")
+                 .append(", HasError=").append(hasError());
+                 
+    if (hasError()) {
+      statusBuilder.append(", ErrorType=").append(error.getClass().getSimpleName())
+                   .append(", ErrorMsg=").append(error.getMessage());
+    }
+    
+    return statusBuilder.toString();
+  }
+
+  /**
+   * Logs the current status of the SSE client at the specified log level.
+   * This is useful for periodically logging the client state for monitoring.
+   * 
+   * @param useWarnLevel If true, logs at WARN level instead of INFO level
+   */
+  public void logStatus(boolean useWarnLevel) {
+    String status = getStatusSummary();
+    if (useWarnLevel) {
+      log.warn(status);
+    } else {
+      log.info(status);
+    }
+  }
+
+  /**
    * Returns the time (in milliseconds) since the last event was received.
    *
    * @return Time in milliseconds since last event
    */
   public long getTimeSinceLastEvent() {
     return System.currentTimeMillis() - lastEventTimestamp;
+  }
+
+  // Default values for health check configuration
+  private static final long DEFAULT_IDLE_TIMEOUT_MS = 60000;  // 1 minute
+  private static final long DEFAULT_CONNECTION_CHECK_INTERVAL_MS = 30000;  // 30 seconds
+  
+  // Health check configuration fields
+  private long idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS;
+  private long connectionCheckIntervalMs = DEFAULT_CONNECTION_CHECK_INTERVAL_MS;
+  private volatile long lastConnectionCheckTimestamp = System.currentTimeMillis();
+  
+  /**
+   * Checks if the connection appears to be healthy.
+   * A connection is considered unhealthy if:
+   * 1. The connection state is not CONNECTED
+   * 2. There's an error
+   * 3. No events have been received within the idle timeout period
+   *
+   * @return true if the connection is healthy, false otherwise
+   */
+  public boolean isConnectionHealthy() {
+    // Check if current state is not CONNECTED
+    if (connectionState != ConnectionState.CONNECTED) {
+      log.warn("Connection is not in CONNECTED state. Current state: {}", connectionState);
+      return false;
+    }
+    
+    // Check if there's an error
+    if (hasError()) {
+      log.warn("Connection has an error: {}", error.getMessage());
+      return false;
+    }
+    
+    // Check if we've exceeded the idle timeout
+    long timeSinceLastEvent = getTimeSinceLastEvent();
+    if (timeSinceLastEvent > idleTimeoutMs) {
+      log.warn("Connection appears to be stalled. No events received in {} ms", timeSinceLastEvent);
+      return false;
+    }
+    
+    return true;
+  }
+  
+  /**
+   * Sets the idle timeout in milliseconds.
+   * If no events are received within this timeout, the connection is considered stalled.
+   *
+   * @param idleTimeoutMs the idle timeout in milliseconds
+   */
+  public void setIdleTimeout(long idleTimeoutMs) {
+    if (idleTimeoutMs <= 0) {
+      throw new IllegalArgumentException("Idle timeout must be positive");
+    }
+    this.idleTimeoutMs = idleTimeoutMs;
+    log.info("Set SSE client idle timeout to {} ms", idleTimeoutMs);
+  }
+  
+  /**
+   * Sets how often the connection should be checked for health.
+   *
+   * @param connectionCheckIntervalMs the connection check interval in milliseconds
+   */
+  public void setConnectionCheckInterval(long connectionCheckIntervalMs) {
+    if (connectionCheckIntervalMs <= 0) {
+      throw new IllegalArgumentException("Connection check interval must be positive");
+    }
+    this.connectionCheckIntervalMs = connectionCheckIntervalMs;
+    log.info("Set SSE client connection check interval to {} ms", connectionCheckIntervalMs);
   }
 
   // Method for testing
@@ -220,6 +328,13 @@ public class ServerSentEventClient implements Closeable {
 
 
   public List<InboundSseEvent> getRecords() throws InterruptedException {
+    // Perform connection health check at regular intervals
+    long now = System.currentTimeMillis();
+    if (now - lastConnectionCheckTimestamp > connectionCheckIntervalMs) {
+      performConnectionHealthCheck();
+      lastConnectionCheckTimestamp = now;
+    }
+    
     // Check connection state and log diagnostic information
     if (connectionState != ConnectionState.CONNECTED) {
       log.warn("Attempting to get records while connection state is: {}", connectionState);
@@ -268,6 +383,65 @@ public class ServerSentEventClient implements Closeable {
     }
     
     return records;
+  }
+  
+  /**
+   * Performs a health check on the connection and takes appropriate action if unhealthy.
+   * This method is called periodically during the getRecords() calls.
+   */
+  private void performConnectionHealthCheck() {
+    log.debug("Performing connection health check");
+    
+    // Skip health check if connection is already in a non-connected state
+    if (connectionState != ConnectionState.CONNECTED) {
+      log.debug("Skipping health check because connection state is: {}", connectionState);
+      return;
+    }
+    
+    // Check if the connection has exceeded the idle timeout
+    long timeSinceLastEvent = getTimeSinceLastEvent();
+    if (timeSinceLastEvent > idleTimeoutMs) {
+      log.warn("Connection stalled - no events received in {} ms (timeout: {} ms)", 
+               timeSinceLastEvent, idleTimeoutMs);
+      
+      // Log detailed diagnostics
+      log.info("Connection diagnostics at timeout: URL={}, Total events={}, Queue size={}", 
+               source.getUri(), totalEventsReceived.get(), queue.size());
+      
+      // The connection might be in a zombie state, attempt to reconnect
+      attemptReconnection();
+    } else {
+      // Only log healthy connection status at the INFO level occasionally
+      if (timeSinceLastEvent > idleTimeoutMs / 2) {
+        log.info("Connection health check passed but no events for a while: {} ms", timeSinceLastEvent);
+      } else {
+        log.debug("Connection health check passed: Last event {} ms ago", timeSinceLastEvent);
+      }
+    }
+  }
+  
+  /**
+   * Attempts to reconnect the SSE client when a connection issue is detected.
+   * This method closes the existing connection and opens a new one.
+   */
+  private void attemptReconnection() {
+    log.info("Attempting to reconnect SSE client due to connection issue");
+    
+    try {
+      // Close existing connection
+      stop();
+      
+      // Clear any existing error
+      error = null;
+      
+      // Attempt to establish a new connection
+      start();
+      log.info("Successfully reconnected SSE client");
+    } catch (IOException e) {
+      log.error("Failed to reconnect SSE client: {}", e.getMessage(), e);
+      setConnectionState(ConnectionState.FAILED);
+      error = e;
+    }
   }
 
   /**
