@@ -247,9 +247,12 @@ public class ServerSentEventClient implements Closeable {
                  .append(", LastEventAge=").append(getTimeSinceLastEvent()).append("ms")
                  .append(", HasError=").append(hasError());
                  
-    if (hasError()) {
-      statusBuilder.append(", ErrorType=").append(error.getClass().getSimpleName())
-                   .append(", ErrorMsg=").append(error.getMessage());
+    if (hasError() && error != null) {
+      // Safe access to error properties to prevent NPEs
+      String errorType = error.getClass().getSimpleName();
+      String errorMessage = error.getMessage() != null ? error.getMessage() : "No message";
+      statusBuilder.append(", ErrorType=").append(errorType)
+                   .append(", ErrorMsg=").append(errorMessage);
     }
     
     return statusBuilder.toString();
@@ -402,10 +405,13 @@ public class ServerSentEventClient implements Closeable {
     log.debug("Drained {} additional events from queue. Total records to return: {}", drained, records.size());
     
     if (records.size() > 0) {
-      log.info("Returning {} records. First event ID: {}, Last event ID: {}", 
-              records.size(), 
-              records.get(0).getId(), 
-              records.get(records.size() - 1).getId());
+      // Get first and last event IDs safely to prevent NPEs
+      String firstEventId = records.get(0).getId() != null ? records.get(0).getId() : "<null>";
+      String lastEventId = records.get(records.size() - 1).getId() != null ? 
+                          records.get(records.size() - 1).getId() : "<null>";
+      
+      log.debug("Returning {} records. First event ID: {}, Last event ID: {}", 
+              records.size(), firstEventId, lastEventId);
     }
     
     return records;
@@ -484,13 +490,19 @@ public class ServerSentEventClient implements Closeable {
     totalEventsReceived.incrementAndGet();
     totalBytesReceived.addAndGet(event.readData() != null ? event.readData().length() : 0);
     
-    // Update event type counter
-    eventTypeCounters.computeIfAbsent(event.getName(), k -> new AtomicLong(0)).incrementAndGet();
+    // Update event type counter - but check for null event name first
+    // ConcurrentHashMap doesn't allow null keys, so we need to handle this case
+    String eventName = event.getName();
+    if (eventName != null) {
+      eventTypeCounters.computeIfAbsent(eventName, k -> new AtomicLong(0)).incrementAndGet();
+    } else {
+      log.debug("Received event with null name, not updating event type counters. Event ID: {}", event.getId());
+    }
     
     if (log.isDebugEnabled()) {
       log.debug("Received SSE event - ID: {}, Name: {}, Data length: {}", 
                 event.getId(), 
-                event.getName(), 
+                eventName, 
                 event.readData() != null ? event.readData().length() : 0);
     }
     
@@ -511,7 +523,9 @@ public class ServerSentEventClient implements Closeable {
    */
   private void onError(Throwable error) {
     setConnectionState(ConnectionState.FAILED);
-    log.error("Error in SSE connection: {}", error.getMessage(), error);
+    // Safe extraction of error message to prevent NPE
+    String errorMessage = error != null ? error.getMessage() : "Unknown error (null)";
+    log.error("Error in SSE connection: {}", errorMessage, error);
     
     // Log additional context information that might help diagnose the issue
     log.error("Connection diagnostic info: URL={}, Last event received={} ms ago, Total events received={}, Queue size={}", 
@@ -564,9 +578,11 @@ public class ServerSentEventClient implements Closeable {
     metrics.put("connection.reconnections", totalReconnections.get());
     metrics.put("connection.hasError", hasError());
     
-    if (hasError()) {
+    if (hasError() && error != null) {
+      // Safe access to error properties to prevent NPEs
       metrics.put("connection.errorType", error.getClass().getName());
-      metrics.put("connection.errorMessage", error.getMessage());
+      // Handle potential null error message
+      metrics.put("connection.errorMessage", error.getMessage() != null ? error.getMessage() : "No message");
     }
     
     // Time-based metrics

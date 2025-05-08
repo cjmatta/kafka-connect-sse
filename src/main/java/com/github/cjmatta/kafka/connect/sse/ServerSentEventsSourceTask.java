@@ -97,11 +97,15 @@ public class ServerSentEventsSourceTask extends SourceTask {
 
     log.debug("Event " + event.toString());
 
+    // Safely handle event fields that might be null
+    String eventName = event.getName() != null ? event.getName() : "unknown";
+    String eventId = event.getId(); // Can be null as per ServerSentEvent schema
+    String eventData = event.readData() != null ? event.readData() : "";
 
     ServerSentEvent serverSentEvent = new ServerSentEvent(
-        event.getName(),
-        event.getId(),
-        event.readData()
+        eventName,
+        eventId,
+        eventData
     );
 
     return new SourceRecord(
