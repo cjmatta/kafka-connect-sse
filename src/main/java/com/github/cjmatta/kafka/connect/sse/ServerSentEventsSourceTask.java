@@ -34,6 +34,11 @@ public class ServerSentEventsSourceTask extends SourceTask {
   static final Logger log = LoggerFactory.getLogger(ServerSentEventsSourceTask.class);
   ServerSentEventsSourceConnectorConfig config;
   ServerSentEventClient client;
+  
+  // Metrics logging configuration
+  private static final long DEFAULT_METRICS_LOG_INTERVAL_MS = 60000; // 1 minute
+  private long metricsLogIntervalMs = DEFAULT_METRICS_LOG_INTERVAL_MS;
+  private long lastMetricsLogTime = 0;
 
 
   @Override
@@ -53,15 +58,29 @@ public class ServerSentEventsSourceTask extends SourceTask {
       client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI));
     }
 
+    // Initialize metrics logging timer
+    lastMetricsLogTime = System.currentTimeMillis();
+    log.info("Metrics will be logged every {} ms", metricsLogIntervalMs);
+
     try {
       client.start();
+      log.info("SSE client started successfully - {}", client.getStatusSummary());
     } catch (IOException e) {
-      e.printStackTrace();
+      log.error("Failed to start SSE client", e);
     }
   }
 
   @Override
   public List<SourceRecord> poll() throws InterruptedException {
+    // Check if it's time to log metrics
+    long currentTime = System.currentTimeMillis();
+    if (currentTime - lastMetricsLogTime > metricsLogIntervalMs) {
+      // Log metrics with warning level if connection isn't healthy
+      boolean useWarnLevel = !client.isConnectionHealthy();
+      client.logMetrics(useWarnLevel);
+      lastMetricsLogTime = currentTime;
+    }
+    
     List<InboundSseEvent> sseEvents = client.getRecords();
     List<SourceRecord> records = new LinkedList<>();
 

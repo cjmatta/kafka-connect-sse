@@ -27,7 +27,9 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -64,8 +66,23 @@ public class ServerSentEventClient implements Closeable {
   private volatile ConnectionState connectionState;
   // Store the last time an event was received
   private volatile long lastEventTimestamp;
-  // Track event statistics
+  
+  // Metrics tracking fields
   private final AtomicLong totalEventsReceived = new AtomicLong(0);
+  private final AtomicLong totalBytesReceived = new AtomicLong(0);
+  private final AtomicLong totalConnectionAttempts = new AtomicLong(0);
+  private final AtomicLong totalSuccessfulConnections = new AtomicLong(0);
+  private final AtomicLong totalFailedConnections = new AtomicLong(0);
+  private final AtomicLong totalConnectionErrors = new AtomicLong(0);
+  private final AtomicLong totalReconnections = new AtomicLong(0);
+  
+  // Performance metrics
+  private volatile long connectedSince = 0;
+  private volatile long lastReconnectTime = 0;
+  private final AtomicLong maxQueueSize = new AtomicLong(0);
+  
+  // Event type counters - useful for monitoring specific event patterns
+  private final Map<String, AtomicLong> eventTypeCounters = new ConcurrentHashMap<>();
   
   private volatile Throwable error;
 
@@ -154,9 +171,18 @@ public class ServerSentEventClient implements Closeable {
       sse.open();
       setConnectionState(ConnectionState.CONNECTED);
       log.info("SSE client successfully connected to {}", source.getUri());
+      
+      // Update connection metrics
+      totalConnectionAttempts.incrementAndGet();
+      totalSuccessfulConnections.incrementAndGet();
+      connectedSince = System.currentTimeMillis();
+      log.info("Connection metrics updated: TotalAttempts={}, TotalSuccess={}", 
+               totalConnectionAttempts.get(), totalSuccessfulConnections.get());
     } catch (Exception e) {
       setConnectionState(ConnectionState.FAILED);
       log.error("Failed to start SSE client connection: {}", e.getMessage(), e);
+      totalConnectionAttempts.incrementAndGet();
+      totalFailedConnections.incrementAndGet();
       throw new IOException("Failed to establish SSE connection", e);
     }
   }
@@ -437,10 +463,13 @@ public class ServerSentEventClient implements Closeable {
       // Attempt to establish a new connection
       start();
       log.info("Successfully reconnected SSE client");
+      totalReconnections.incrementAndGet();
+      lastReconnectTime = System.currentTimeMillis();
     } catch (IOException e) {
       log.error("Failed to reconnect SSE client: {}", e.getMessage(), e);
       setConnectionState(ConnectionState.FAILED);
       error = e;
+      totalConnectionErrors.incrementAndGet();
     }
   }
 
@@ -453,6 +482,10 @@ public class ServerSentEventClient implements Closeable {
   private void onMessage(InboundSseEvent event) {
     lastEventTimestamp = System.currentTimeMillis();
     totalEventsReceived.incrementAndGet();
+    totalBytesReceived.addAndGet(event.readData() != null ? event.readData().length() : 0);
+    
+    // Update event type counter
+    eventTypeCounters.computeIfAbsent(event.getName(), k -> new AtomicLong(0)).incrementAndGet();
     
     if (log.isDebugEnabled()) {
       log.debug("Received SSE event - ID: {}, Name: {}, Data length: {}", 
@@ -467,6 +500,7 @@ public class ServerSentEventClient implements Closeable {
     }
     
     this.queue.add(event);
+    updateMaxQueueSize();
   }
 
   /**
@@ -487,6 +521,7 @@ public class ServerSentEventClient implements Closeable {
               queue.size());
               
     this.error = error;
+    totalConnectionErrors.incrementAndGet();
   }
 
   /**
@@ -508,5 +543,89 @@ public class ServerSentEventClient implements Closeable {
     stop();
     close();
     log.info("SSE client resources successfully closed");
+  }
+  
+  /**
+   * Returns a map of all metrics collected by this SSE client.
+   * This is useful for monitoring the health and performance of the connector.
+   *
+   * @return Map of metric names to values
+   */
+  public Map<String, Object> getMetrics() {
+    Map<String, Object> metrics = new ConcurrentHashMap<>();
+    
+    // Connection metrics
+    metrics.put("connection.state", connectionState.toString());
+    metrics.put("connection.url", source.getUri().toString());
+    metrics.put("connection.attempts", totalConnectionAttempts.get());
+    metrics.put("connection.successful", totalSuccessfulConnections.get());
+    metrics.put("connection.failed", totalFailedConnections.get());
+    metrics.put("connection.errors", totalConnectionErrors.get());
+    metrics.put("connection.reconnections", totalReconnections.get());
+    metrics.put("connection.hasError", hasError());
+    
+    if (hasError()) {
+      metrics.put("connection.errorType", error.getClass().getName());
+      metrics.put("connection.errorMessage", error.getMessage());
+    }
+    
+    // Time-based metrics
+    metrics.put("time.sinceLastEvent", getTimeSinceLastEvent());
+    metrics.put("time.uptime", connectionState == ConnectionState.CONNECTED ? 
+                (System.currentTimeMillis() - connectedSince) : 0);
+    metrics.put("time.sinceLastReconnect", lastReconnectTime > 0 ? 
+                (System.currentTimeMillis() - lastReconnectTime) : -1);
+    
+    // Event metrics
+    metrics.put("events.total", totalEventsReceived.get());
+    metrics.put("events.bytes", totalBytesReceived.get());
+    metrics.put("queue.size", queue.size());
+    metrics.put("queue.maxSize", maxQueueSize.get());
+    
+    // Event type metrics
+    Map<String, Long> eventTypes = new ConcurrentHashMap<>();
+    eventTypeCounters.forEach((type, count) -> eventTypes.put(type, count.get()));
+    metrics.put("events.byType", eventTypes);
+    
+    return metrics;
+  }
+  
+  /**
+   * Returns a specific metric value by name.
+   * 
+   * @param name The name of the metric to retrieve
+   * @return The value of the metric, or null if the metric doesn't exist
+   */
+  public Object getMetric(String name) {
+    return getMetrics().get(name);
+  }
+  
+  /**
+   * Logs all metrics at the specified log level.
+   * This is useful for periodic reporting of connector status.
+   * 
+   * @param useWarnLevel If true, logs at WARN level, otherwise at INFO level
+   */
+  public void logMetrics(boolean useWarnLevel) {
+    Map<String, Object> metrics = getMetrics();
+    
+    if (useWarnLevel) {
+      log.warn("SSE Client Metrics: {}", metrics);
+    } else {
+      log.info("SSE Client Metrics: {}", metrics);
+    }
+  }
+  
+  /**
+   * Updates the maximum queue size metric if the current queue size is larger.
+   * Called internally when events are added to the queue.
+   */
+  private void updateMaxQueueSize() {
+    int currentSize = queue.size();
+    long currentMax = maxQueueSize.get();
+    
+    if (currentSize > currentMax) {
+      maxQueueSize.set(currentSize);
+    }
   }
 }
