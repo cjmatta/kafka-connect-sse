@@ -1,7 +1,16 @@
-# Server Sent Events
+# Server Sent Events Source Connector for Apache Kafka
 
-This is a Kafka Connect source connector supporting the [Server Sent Events Standard](https://en.wikipedia.org/wiki/Server-sent_events).
+A Kafka Connect source connector supporting the [Server Sent Events Standard](https://en.wikipedia.org/wiki/Server-sent_events) to stream real-time updates from SSE-compatible endpoints into Apache Kafka topics.
 
+## Features
+
+- Streams events from any Server-Sent Events (SSE) compatible endpoint
+- Supports secured endpoints with HTTP Basic Authentication
+- Compatible with Kafka Connect in standalone and distributed modes
+- Works with Confluent Platform and Confluent Cloud
+- Configurable topic routing
+- JSON data formatting
+- Easy deployment and management with included scripts
 
 ## Configuration
 
@@ -13,9 +22,117 @@ This is a Kafka Connect source connector supporting the [Server Sent Events Stan
 | http.basic.auth.username | username                          | no       |
 | http.basic.auth.password | password                          | no       |
 
-ToDo:
-- [x] Support for basic auth
+## Building the Connector
 
+To build the connector, you need Maven and Java 8 or higher installed on your system.
+
+```bash
+# Clone the repository
+git clone https://github.com/cjmatta/kafka-connect-sse.git
+cd kafka-connect-sse
+
+# Build the connector
+mvn clean package
+```
+
+This will create a ZIP file at `target/components/packages/cjmatta-kafka-connect-sse-1.2.zip` that can be used to deploy the connector.
+
+## Deployment Options
+
+### Standalone Mode
+
+1. Extract the ZIP file to your Kafka Connect plugins directory
+2. Configure the connector in a properties file (see `config/kafka-connect-sse.properties` for an example)
+3. Start Kafka Connect with the standalone config:
+
+```bash
+$KAFKA_HOME/bin/connect-standalone.sh $KAFKA_HOME/config/connect-standalone.properties path/to/your-connector-config.properties
+```
+
+### Distributed Mode
+
+1. Extract the ZIP file to your Kafka Connect plugins directory on all worker nodes
+2. Restart the Kafka Connect workers to pick up the new plugin
+3. Use the Kafka Connect REST API to create a connector instance:
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  --data @config/your-connector-config.json \
+  http://localhost:8083/connectors
+```
+
+### Confluent Platform
+
+1. Use Confluent Hub to install the connector:
+
+```bash
+confluent-hub install cjmatta/kafka-connect-sse:1.2
+```
+
+2. Restart Kafka Connect
+3. Create a connector instance using Confluent Control Center UI or the REST API
+
+### Confluent Cloud
+
+The repository includes a convenient script to manage the connector in Confluent Cloud:
+
+```bash
+./manage-connector.sh upload   # Upload the connector plugin
+./manage-connector.sh create   # Create a connector instance
+```
+
+## Managing with manage-connector.sh
+
+The included `manage-connector.sh` script provides a simplified workflow for managing the connector in Confluent Cloud:
+
+### Prerequisites
+
+- Confluent CLI installed and configured
+- Environment variables for authentication (or 1Password CLI)
+
+### Commands
+
+```bash
+# Upload the connector plugin to Confluent Cloud
+./manage-connector.sh upload
+
+# Create a connector instance
+./manage-connector.sh create
+
+# Check status of connectors and plugins
+./manage-connector.sh status
+
+# Delete a connector instance
+./manage-connector.sh delete-connector --connector-id <ID>
+
+# Delete a plugin
+./manage-connector.sh delete-plugin --plugin-id <ID>
+
+# Display help
+./manage-connector.sh help
+```
+
+### Using with 1Password
+
+If you use 1Password to store your Confluent Cloud credentials:
+
+```bash
+# Create a .env file with your credential references
+op run --env-file=.env -- ./manage-connector.sh create
+```
+
+## Example: Wikipedia Recent Changes
+
+To stream Wikipedia's recent changes:
+
+1. Build the connector
+2. Upload to Confluent Cloud: `./manage-connector.sh upload`
+3. Create the connector: `./manage-connector.sh create`
+4. Verify data is flowing:
+   ```bash
+   kafka-console-consumer --bootstrap-server <your-bootstrap-server> \
+     --topic wikimedia-raw --from-beginning
+   ```
 
 ## ⚠️ Offset and Resume Disclaimer
 
@@ -27,5 +144,3 @@ As a result:
 	•	This connector does not persist partition or offset information for use in resuming ingestion.
 	•	Upon restart, the connector will resume consuming from the current point in the stream as provided by the SSE server.
 	•	No deduplication or de-duplication caching is performed unless explicitly implemented by the user at the application or downstream level.
-
-For advanced users: if your SSE stream includes a stable and sequential event ID, you may implement custom filtering logic or use a specialized, forked version of the connector with support for offset tracking and resume.
