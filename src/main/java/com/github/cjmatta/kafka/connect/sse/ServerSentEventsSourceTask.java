@@ -16,14 +16,14 @@
 
 package com.github.cjmatta.kafka.connect.sse;
 
-import com.github.jcustenborder.kafka.connect.utils.VersionUtil;
-import com.launchdarkly.eventsource.MessageEvent;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import com.github.jcustenborder.kafka.connect.utils.VersionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.sse.InboundSseEvent;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -34,6 +34,11 @@ public class ServerSentEventsSourceTask extends SourceTask {
   static final Logger log = LoggerFactory.getLogger(ServerSentEventsSourceTask.class);
   ServerSentEventsSourceConnectorConfig config;
   ServerSentEventClient client;
+  
+  // Metrics logging configuration
+  private static final long DEFAULT_METRICS_LOG_INTERVAL_MS = 60000; // 1 minute
+  private long metricsLogIntervalMs = DEFAULT_METRICS_LOG_INTERVAL_MS;
+  private long lastMetricsLogTime = 0;
 
 
   @Override
@@ -44,47 +49,63 @@ public class ServerSentEventsSourceTask extends SourceTask {
   @Override
   public void start(Map<String, String> map) {
     log.info("Starting Server Sent Events Source Task");
-    this.config = new ServerSentEventsSourceConnectorConfig(map);
+    config = new ServerSentEventsSourceConnectorConfig(map);
+    if(config.httpBasicAuth) {
+      client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI),
+          config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_USERNAME),
+          config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_PASSWORD));
+    } else {
+      client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI));
+    }
+
+    // Initialize metrics logging timer
+    lastMetricsLogTime = System.currentTimeMillis();
+    log.info("Metrics will be logged every {} ms", metricsLogIntervalMs);
 
     try {
-//      HTTP Basic Auth
-      if (this.config.httpBasicAuth) {
-        client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI),
-          this.config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_USERNAME),
-          this.config.getPassword(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_PASSWORD)
-        );
-//        No Auth
-      } else {
-        client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI));
-      }
       client.start();
-    } catch (Exception e) {
-      throw new ConnectException("The SSE client failed to start", e);
+      log.info("SSE client started successfully - {}", client.getStatusSummary());
+    } catch (IOException e) {
+      log.error("Failed to start SSE client", e);
     }
   }
 
   @Override
   public List<SourceRecord> poll() throws InterruptedException {
-    List<MessageEvent> sseEvents = client.getRecords();
+    // Check if it's time to log metrics
+    long currentTime = System.currentTimeMillis();
+    if (currentTime - lastMetricsLogTime > metricsLogIntervalMs) {
+      // Log metrics with warning level if connection isn't healthy
+      boolean useWarnLevel = !client.isConnectionHealthy();
+      client.logMetrics(useWarnLevel);
+      lastMetricsLogTime = currentTime;
+    }
+    
+    List<InboundSseEvent> sseEvents = client.getRecords();
     List<SourceRecord> records = new LinkedList<>();
 
-    for (MessageEvent event : sseEvents) {
+    for (InboundSseEvent event : sseEvents) {
       records.add(createSourceRecordFromSseEvent(event));
     }
 
     return records;
   }
 
-  private SourceRecord createSourceRecordFromSseEvent(MessageEvent event) {
+  private SourceRecord createSourceRecordFromSseEvent(InboundSseEvent event) {
     Map<String, ?> srcOffset = Collections.emptyMap();
     Map<String, ?> srcPartition = Collections.emptyMap();
 
     log.debug("Event " + event.toString());
 
+    // Safely handle event fields that might be null
+    String eventName = event.getName() != null ? event.getName() : "unknown";
+    String eventId = event.getId(); // Can be null as per ServerSentEvent schema
+    String eventData = event.readData() != null ? event.readData() : "";
 
     ServerSentEvent serverSentEvent = new ServerSentEvent(
-        event.getLastEventId(),
-        event.getData()
+        eventName,
+        eventId,
+        eventData
     );
 
     return new SourceRecord(
