@@ -22,7 +22,6 @@ TASKS_MAX="1"
 SSE_URI="https://stream.wikimedia.org/v2/stream/recentchange"
 TOPIC="wikimedia-raw"
 CONTACT_INFO="admin@example.com"
-ROBOTS_TXT_CHECK_ENABLED="true"
 COMPRESSION_ENABLED="true"
 
 # Dynamic plugin ID - will be set after upload
@@ -55,7 +54,6 @@ CONFIG_TEMPLATE='{
         "user.agent": "{{USER_AGENT}}",
         "contact.info": "{{CONTACT_INFO}}",
         "compression.enabled": "{{COMPRESSION_ENABLED}}",
-        "robots.txt.check.enabled": "{{ROBOTS_TXT_CHECK_ENABLED}}",
         "sse.uri": "{{SSE_URI}}",
         "topic": "{{TOPIC}}",
         "value.converter": "io.confluent.connect.json.JsonSchemaConverter"
@@ -111,7 +109,6 @@ function generate_config {
         sed "s|{{USER_AGENT}}|$USER_AGENT|g" | \
         sed "s|{{CONTACT_INFO}}|$CONTACT_INFO|g" | \
         sed "s|{{COMPRESSION_ENABLED}}|$COMPRESSION_ENABLED|g" | \
-        sed "s|{{ROBOTS_TXT_CHECK_ENABLED}}|$ROBOTS_TXT_CHECK_ENABLED|g" | \
         sed "s|{{TOPIC}}|$TOPIC|g")
     
     # Write config to file
