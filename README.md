@@ -11,16 +11,49 @@ A Kafka Connect source connector supporting the [Server Sent Events Standard](ht
 - Configurable topic routing
 - JSON data formatting
 - Easy deployment and management with included scripts
+- **NEW in v1.3:**
+  - Configurable User-Agent header support
+  - HTTP compression (gzip) support
+  - Rate limiting capabilities
+  - Exponential backoff retry logic
+  - Enhanced error handling for HTTP status codes
+  - Contact information inclusion in User-Agent
 
 ## Configuration
 
-| Configuration Parameter  | Description                       | Required |
-|--------------------------|-----------------------------------|----------|
-| sse.uri                  | URI for the SSE stream            | yes      |
-| topic                    | Topic to send events to           | yes      |
-| http.basic.auth          | Weather or not use use basic auth | no       |
-| http.basic.auth.username | username                          | no       |
-| http.basic.auth.password | password                          | no       |
+### Core Configuration
+
+| Configuration Parameter  | Description                       | Required | Default |
+|--------------------------|-----------------------------------|----------|---------|
+| sse.uri                  | URI for the SSE stream            | yes      | -       |
+| topic                    | Topic to send events to           | yes      | -       |
+| http.basic.auth          | Whether or not to use basic auth  | no       | false   |
+| http.basic.auth.username | Username for basic authentication | no       | -       |
+| http.basic.auth.password | Password for basic authentication | no       | -       |
+
+### HTTP Client Configuration
+
+| Configuration Parameter          | Description                                    | Required | Default |
+|----------------------------------|------------------------------------------------|----------|---------|
+| user.agent                       | User-Agent header for HTTP requests          | no       | KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse) |
+| contact.info                     | Contact information to include in User-Agent | no       | -       |
+| compression.enabled              | Enable gzip compression                       | no       | true    |
+| robots.txt.check.enabled         | Enable robots.txt compliance checking        | no       | false   |
+
+### Rate Limiting Configuration
+
+| Configuration Parameter              | Description                                   | Required | Default |
+|--------------------------------------|-----------------------------------------------|----------|---------|
+| rate.limit.requests.per.second      | Maximum requests per second (optional)        | no       | -       |
+| rate.limit.max.concurrent           | Maximum concurrent connections (optional)     | no       | -       |
+
+### Retry Configuration
+
+| Configuration Parameter    | Description                                  | Required | Default |
+|----------------------------|----------------------------------------------|----------|---------|
+| retry.backoff.initial.ms   | Initial backoff time for retries (ms)      | no       | 2000    |
+| retry.backoff.max.ms       | Maximum backoff time for retries (ms)      | no       | 30000   |
+| retry.max.attempts         | Maximum retry attempts (-1 for unlimited)   | no       | -1      |
 
 ## Building the Connector
 
@@ -35,7 +68,7 @@ cd kafka-connect-sse
 mvn clean package
 ```
 
-This will create a ZIP file at `target/components/packages/cjmatta-kafka-connect-sse-1.2.zip` that can be used to deploy the connector.
+This will create a ZIP file at `target/components/packages/cjmatta-kafka-connect-sse-1.3.zip` that can be used to deploy the connector.
 
 ## Deployment Options
 
@@ -66,7 +99,7 @@ curl -X POST -H "Content-Type: application/json" \
 1. Use Confluent Hub to install the connector:
 
 ```bash
-confluent-hub install cjmatta/kafka-connect-sse:1.2
+confluent-hub install cjmatta/kafka-connect-sse:1.3
 ```
 
 2. Restart Kafka Connect
@@ -123,7 +156,31 @@ op run --env-file=.env -- ./manage-connector.sh create
 
 ## Example: Wikipedia Recent Changes
 
-To stream Wikipedia's recent changes:
+To stream Wikipedia's recent changes while complying with Wikimedia's robot policy:
+
+### Configuration for Wikimedia Compliance
+
+```properties
+name=wikipedia-sse-connector
+connector.class=com.github.cjmatta.kafka.connect.sse.ServerSentEventsSourceConnector
+sse.uri=https://stream.wikimedia.org/v2/stream/recentchange
+topic=wikimedia-raw
+
+# Robot policy compliance
+user.agent=MyApp/1.0 (https://example.com/myapp; contact@example.com)
+contact.info=admin@mycompany.com
+rate.limit.requests.per.second=10
+rate.limit.max.concurrent=5
+compression.enabled=true
+robots.txt.check.enabled=true
+
+# Retry configuration
+retry.backoff.initial.ms=2000
+retry.backoff.max.ms=30000
+retry.max.attempts=10
+```
+
+### Deployment Steps
 
 1. Build the connector
 2. Upload to Confluent Cloud: `./manage-connector.sh upload`
@@ -133,6 +190,48 @@ To stream Wikipedia's recent changes:
    kafka-console-consumer --bootstrap-server <your-bootstrap-server> \
      --topic wikimedia-raw --from-beginning
    ```
+
+## Best Practices
+
+### Robot Policy Compliance
+
+When connecting to public SSE endpoints, especially those like Wikimedia, always:
+
+1. **Set a descriptive User-Agent**: Include your application name, version, and contact information
+   ```properties
+   user.agent=MyApp/1.0 (https://example.com/myapp)
+   contact.info=admin@example.com
+   ```
+
+2. **Respect rate limits**: Configure appropriate rate limiting to avoid overwhelming the server
+   ```properties
+   rate.limit.requests.per.second=10
+   rate.limit.max.concurrent=5
+   ```
+
+3. **Enable compression**: Reduce bandwidth usage
+   ```properties
+   compression.enabled=true
+   ```
+
+4. **Check robots.txt compliance**: Respect server access policies
+   ```properties
+   robots.txt.check.enabled=true
+   ```
+
+5. **Configure reasonable retries**: Use exponential backoff for connection issues
+   ```properties
+   retry.backoff.initial.ms=2000
+   retry.backoff.max.ms=30000
+   retry.max.attempts=10
+   ```
+
+### Production Deployment
+
+- Monitor connector health using the built-in metrics logging
+- Set up appropriate alerting on connection failures
+- Consider using data dumps for historical data before starting real-time streaming
+- Test rate limiting settings in development before production deployment
 
 ## ⚠️ Offset and Resume Disclaimer
 

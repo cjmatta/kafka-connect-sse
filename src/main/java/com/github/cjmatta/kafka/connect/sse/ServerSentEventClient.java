@@ -63,6 +63,20 @@ public class ServerSentEventClient implements Closeable {
   private final String username;
   private final String password;
   
+  // Store configuration for enhanced HTTP behavior
+  private final String userAgent;
+  private final boolean compressionEnabled;
+  private final Double rateLimitRequestsPerSecond;
+  private final Integer rateLimitMaxConcurrent;
+  private final long retryBackoffInitialMs;
+  private final long retryBackoffMaxMs;
+  private final int retryMaxAttempts;
+  private final boolean robotsTxtCheckEnabled;
+  
+  // Rate limiting fields
+  private volatile long lastRequestTime = 0;
+  private volatile int currentRetryAttempt = 0;
+  
   // Track current connection state
   private volatile ConnectionState connectionState;
   // Store the last time an event was received
@@ -93,15 +107,8 @@ public class ServerSentEventClient implements Closeable {
    * @param url The URL of the SSE stream
    */
   public ServerSentEventClient(String url) {
-    log.info("Initializing SSE Client for URL: {}", url);
-    this.client = ClientBuilder.newClient();
-    this.source = client.target(url);
-    this.username = null;
-    this.password = null;
-    this.queue = new LinkedBlockingDeque<>();
-    this.connectionState = ConnectionState.INITIALIZED;
-    this.lastEventTimestamp = System.currentTimeMillis();
-    log.info("SSE Client initialized in state: {}", connectionState);
+    this(url, null, null, "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)", 
+         true, null, null, 2000L, 30000L, -1, false);
   }
 
   /**
@@ -112,15 +119,8 @@ public class ServerSentEventClient implements Closeable {
    * @param password Password for basic authentication
    */
   ServerSentEventClient(String url, String username, String password) {
-    log.info("Initializing SSE Client for URL: {} with authentication", url);
-    this.client = ClientBuilder.newClient();
-    this.source = client.target(url);
-    this.username = username;
-    this.password = password;
-    this.queue = new LinkedBlockingDeque<>();
-    this.connectionState = ConnectionState.INITIALIZED;
-    this.lastEventTimestamp = System.currentTimeMillis();
-    log.info("SSE Client initialized in state: {}", connectionState);
+    this(url, username, password, "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)", 
+         true, null, null, 2000L, 30000L, -1, false);
   }
 
   /**
@@ -132,11 +132,134 @@ public class ServerSentEventClient implements Closeable {
     this.source = source;
     this.username = username;
     this.password = password;
+    this.userAgent = "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)";
+    this.compressionEnabled = true;
+    this.rateLimitRequestsPerSecond = null;
+    this.rateLimitMaxConcurrent = null;
+    this.retryBackoffInitialMs = 2000L;
+    this.retryBackoffMaxMs = 30000L;
+    this.retryMaxAttempts = -1;
+    this.robotsTxtCheckEnabled = false;
     this.queue = new LinkedBlockingDeque<>();
     this.sse = sse;
     this.connectionState = ConnectionState.INITIALIZED;
     this.lastEventTimestamp = System.currentTimeMillis();
+    this.currentRetryAttempt = 0;
     log.info("SSE Client initialized in state: {}", connectionState);
+  }
+
+  /**
+   * Creates a new SSE client with full configuration.
+   *
+   * @param url                        The URL of the SSE stream
+   * @param username                   Username for basic authentication (null if not needed)
+   * @param password                   Password for basic authentication (null if not needed)
+   * @param userAgent                  User-Agent header value
+   * @param compressionEnabled         Whether to enable gzip compression
+   * @param rateLimitRequestsPerSecond Rate limit for requests per second (null if not needed)
+   * @param rateLimitMaxConcurrent     Maximum concurrent connections (null if not needed)
+   * @param retryBackoffInitialMs      Initial backoff time for retries
+   * @param retryBackoffMaxMs          Maximum backoff time for retries
+   * @param retryMaxAttempts           Maximum retry attempts (-1 for unlimited)
+   * @param robotsTxtCheckEnabled      Whether to check robots.txt before connecting
+   */
+  public ServerSentEventClient(String url, String username, String password, String userAgent,
+                              boolean compressionEnabled, Double rateLimitRequestsPerSecond,
+                              Integer rateLimitMaxConcurrent, long retryBackoffInitialMs,
+                              long retryBackoffMaxMs, int retryMaxAttempts, boolean robotsTxtCheckEnabled) {
+    log.info("Initializing SSE Client for URL: {} with enhanced configuration", url);
+    this.client = createClient(compressionEnabled);
+    this.source = client.target(url);
+    this.username = username;
+    this.password = password;
+    this.userAgent = userAgent != null ? userAgent : "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)";
+    this.compressionEnabled = compressionEnabled;
+    this.rateLimitRequestsPerSecond = rateLimitRequestsPerSecond;
+    this.rateLimitMaxConcurrent = rateLimitMaxConcurrent;
+    this.retryBackoffInitialMs = retryBackoffInitialMs;
+    this.retryBackoffMaxMs = retryBackoffMaxMs;
+    this.retryMaxAttempts = retryMaxAttempts;
+    this.robotsTxtCheckEnabled = robotsTxtCheckEnabled;
+    this.queue = new LinkedBlockingDeque<>();
+    this.connectionState = ConnectionState.INITIALIZED;
+    this.lastEventTimestamp = System.currentTimeMillis();
+    this.currentRetryAttempt = 0;
+    log.info("SSE Client initialized with User-Agent: {}, compression: {}, robots.txt check: {}", 
+             this.userAgent, compressionEnabled, robotsTxtCheckEnabled);
+  }
+
+  /**
+   * Creates and configures the HTTP client based on configuration.
+   * 
+   * @param compressionEnabled Whether to enable gzip compression
+   * @return Configured Jersey Client
+   */
+  private Client createClient(boolean compressionEnabled) {
+    ClientBuilder builder = ClientBuilder.newBuilder();
+    
+    if (compressionEnabled) {
+      // Jersey will automatically handle gzip compression when this property is set
+      builder.property("jersey.config.client.useEncoding", "gzip");
+    }
+    
+    return builder.build();
+  }
+
+  /**
+   * Applies rate limiting by sleeping if necessary to respect the configured requests per second.
+   */
+  private void applyRateLimit() {
+    if (rateLimitRequestsPerSecond == null || rateLimitRequestsPerSecond <= 0) {
+      return;
+    }
+    
+    long currentTime = System.currentTimeMillis();
+    long timeSinceLastRequest = currentTime - lastRequestTime;
+    long minIntervalMs = (long) (1000.0 / rateLimitRequestsPerSecond);
+    
+    if (timeSinceLastRequest < minIntervalMs) {
+      long sleepTime = minIntervalMs - timeSinceLastRequest;
+      log.debug("Rate limiting: sleeping for {} ms to respect {} requests/second", sleepTime, rateLimitRequestsPerSecond);
+      try {
+        Thread.sleep(sleepTime);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        log.warn("Rate limiting sleep interrupted", e);
+      }
+    }
+    
+    lastRequestTime = System.currentTimeMillis();
+  }
+
+  /**
+   * Checks robots.txt compliance for the target URL.
+   * 
+   * @throws IOException if robots.txt check fails or access is disallowed
+   */
+  private void checkRobotsTxtCompliance() throws IOException {
+    log.info("Checking robots.txt compliance for URL: {}", source.getUri());
+    
+    RobotsTxtChecker checker = null;
+    try {
+      checker = new RobotsTxtChecker(userAgent);
+      boolean accessAllowed = checker.isAccessAllowed(source.getUri().toString());
+      
+      if (!accessAllowed) {
+        throw new IOException("Access to " + source.getUri() + " is disallowed by robots.txt");
+      }
+      
+      log.info("robots.txt compliance check passed for: {}", source.getUri());
+      
+    } catch (Exception e) {
+      if (e instanceof IOException) {
+        throw (IOException) e;
+      }
+      throw new IOException("Failed to check robots.txt compliance", e);
+    } finally {
+      if (checker != null) {
+        checker.close();
+      }
+    }
   }
 
   /**
@@ -148,9 +271,25 @@ public class ServerSentEventClient implements Closeable {
   public void start() throws IOException {
     try {
       log.info("Starting SSE client connection to {}", source.getUri());
+      
+      // Check robots.txt compliance if enabled
+      if (robotsTxtCheckEnabled) {
+        checkRobotsTxtCompliance();
+      }
+      
       setConnectionState(ConnectionState.CONNECTING);
       
       Invocation.Builder builder = this.source.request();
+      
+      // Apply User-Agent header
+      builder.header("User-Agent", userAgent);
+      log.debug("Added User-Agent header: {}", userAgent);
+      
+      // Apply compression headers if enabled
+      if (compressionEnabled) {
+        builder.header("Accept-Encoding", "gzip, deflate");
+        log.debug("Added compression headers");
+      }
       
       // Apply basic authentication if credentials are provided
       if (username != null && password != null) {
@@ -161,10 +300,16 @@ public class ServerSentEventClient implements Closeable {
         log.debug("Added Basic Authentication header");
       }
       
-      log.debug("Configuring SSE event source with reconnection interval of 2 seconds");
+      // Apply rate limiting if configured
+      if (rateLimitRequestsPerSecond != null && rateLimitRequestsPerSecond > 0) {
+        applyRateLimit();
+      }
+      
+      long reconnectInterval = Math.min(retryBackoffInitialMs, 2000L);
+      log.debug("Configuring SSE event source with reconnection interval of {} milliseconds", reconnectInterval);
       sse = SseEventSource
         .target(this.source)
-        .reconnectingEvery(2, TimeUnit.SECONDS)
+        .reconnectingEvery(reconnectInterval, TimeUnit.MILLISECONDS)
         .build();
 
       sse.register(this::onMessage, this::onError);
@@ -455,12 +600,28 @@ public class ServerSentEventClient implements Closeable {
   
   /**
    * Attempts to reconnect the SSE client when a connection issue is detected.
-   * This method closes the existing connection and opens a new one.
+   * Uses exponential backoff for retry delays.
    */
   private void attemptReconnection() {
-    log.info("Attempting to reconnect SSE client due to connection issue");
+    // Check if we've exceeded max retry attempts
+    if (retryMaxAttempts != -1 && currentRetryAttempt >= retryMaxAttempts) {
+      log.error("Maximum retry attempts ({}) exceeded, giving up reconnection", retryMaxAttempts);
+      setConnectionState(ConnectionState.FAILED);
+      return;
+    }
+    
+    currentRetryAttempt++;
+    
+    // Calculate exponential backoff delay
+    long backoffMs = calculateBackoffDelay(currentRetryAttempt);
+    log.info("Attempting reconnection #{} with {}ms backoff due to connection issue", currentRetryAttempt, backoffMs);
     
     try {
+      // Apply exponential backoff delay
+      if (backoffMs > 0) {
+        Thread.sleep(backoffMs);
+      }
+      
       // Close existing connection
       stop();
       
@@ -469,15 +630,67 @@ public class ServerSentEventClient implements Closeable {
       
       // Attempt to establish a new connection
       start();
-      log.info("Successfully reconnected SSE client");
+      log.info("Successfully reconnected SSE client on attempt #{}", currentRetryAttempt);
       totalReconnections.incrementAndGet();
       lastReconnectTime = System.currentTimeMillis();
+      // Reset retry counter on successful connection
+      currentRetryAttempt = 0;
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      log.warn("Reconnection attempt interrupted", e);
+      setConnectionState(ConnectionState.FAILED);
+      error = e;
     } catch (IOException e) {
-      log.error("Failed to reconnect SSE client: {}", e.getMessage(), e);
+      log.error("Failed to reconnect SSE client on attempt #{}: {}", currentRetryAttempt, e.getMessage(), e);
       setConnectionState(ConnectionState.FAILED);
       error = e;
       totalConnectionErrors.incrementAndGet();
+      
+      // Check if this was a rate limiting error (HTTP 429)
+      if (isRateLimitError(e)) {
+        log.warn("Rate limit error detected, extending backoff time");
+        // Rate limit errors get longer backoffs
+        currentRetryAttempt = Math.max(currentRetryAttempt, 3);
+      }
     }
+  }
+  
+  /**
+   * Calculates the exponential backoff delay for the given retry attempt.
+   * 
+   * @param attempt The retry attempt number (1-based)
+   * @return The backoff delay in milliseconds
+   */
+  private long calculateBackoffDelay(int attempt) {
+    if (attempt <= 1) {
+      return retryBackoffInitialMs;
+    }
+    
+    // Exponential backoff: initial * 2^(attempt-1), capped at max
+    long delay = retryBackoffInitialMs * (long) Math.pow(2, attempt - 1);
+    return Math.min(delay, retryBackoffMaxMs);
+  }
+  
+  /**
+   * Checks if an exception indicates a rate limiting error.
+   * 
+   * @param exception The exception to check
+   * @return true if the exception indicates rate limiting
+   */
+  private boolean isRateLimitError(Throwable exception) {
+    if (exception == null) {
+      return false;
+    }
+    
+    String message = exception.getMessage();
+    if (message != null) {
+      String lowerMessage = message.toLowerCase();
+      return lowerMessage.contains("429") || 
+             lowerMessage.contains("too many requests") ||
+             lowerMessage.contains("rate limit");
+    }
+    
+    return false;
   }
 
   /**

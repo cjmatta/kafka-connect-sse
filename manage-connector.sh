@@ -10,7 +10,7 @@
 
 # Default values - customize these as needed
 PLUGIN_NAME="kafka-connect-sse"
-PLUGIN_FILE="$(pwd)/target/components/packages/cjmatta-kafka-connect-sse-1.2.zip"
+PLUGIN_FILE="$(pwd)/target/components/packages/cjmatta-kafka-connect-sse-1.3.zip"
 CONNECTOR_CLASS="com.github.cjmatta.kafka.connect.sse.ServerSentEventsSourceConnector"
 CLUSTER_ID="lkc-zm1p10"
 CLOUD_PROVIDER="aws"

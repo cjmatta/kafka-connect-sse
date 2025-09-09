@@ -82,6 +82,80 @@ public class ServerSentEventClientTest {
   }
 
   @Test
+  public void testUserAgentHeader() throws Exception {
+    // Test with custom configuration
+    ServerSentEventClient customClient = new ServerSentEventClient(
+        "http://test.com", null, null, "TestApp/1.0 (test@example.com)",
+        true, null, null, 2000L, 30000L, -1, false);
+    
+    // We can't easily test the actual header without mocking the internal client creation
+    // but we can verify the client was created with the correct user agent
+    // This test mainly ensures the constructor accepts the parameters correctly
+    assertEquals("INITIALIZED", customClient.getConnectionState().toString());
+  }
+  
+  @Test
+  public void testRateLimiting() throws Exception {
+    // Test with rate limiting configuration
+    ServerSentEventClient rateLimitedClient = new ServerSentEventClient(
+        "http://test.com", null, null, "TestApp/1.0",
+        true, 5.0, 2, 1000L, 10000L, 3, false);
+    
+    // Verify the client was created successfully with rate limiting parameters
+    assertEquals("INITIALIZED", rateLimitedClient.getConnectionState().toString());
+  }
+  
+  @Test
+  public void testExponentialBackoffCalculation() throws Exception {
+    // Create a client to access the calculateBackoffDelay method via reflection
+    ServerSentEventClient testClient = new ServerSentEventClient(
+        "http://test.com", null, null, "TestApp/1.0",
+        true, null, null, 1000L, 30000L, -1, false);
+    
+    // Use reflection to test the calculateBackoffDelay method
+    java.lang.reflect.Method calculateBackoffMethod = ServerSentEventClient.class
+        .getDeclaredMethod("calculateBackoffDelay", int.class);
+    calculateBackoffMethod.setAccessible(true);
+    
+    // Test exponential backoff progression
+    long delay1 = (Long) calculateBackoffMethod.invoke(testClient, 1);
+    long delay2 = (Long) calculateBackoffMethod.invoke(testClient, 2);
+    long delay3 = (Long) calculateBackoffMethod.invoke(testClient, 3);
+    
+    assertEquals(1000L, delay1); // Initial delay
+    assertEquals(2000L, delay2); // 1000 * 2^1
+    assertEquals(4000L, delay3); // 1000 * 2^2
+    
+    // Test that delays are capped at maximum
+    long delayMax = (Long) calculateBackoffMethod.invoke(testClient, 20);
+    assertEquals(30000L, delayMax); // Should be capped at retryBackoffMaxMs
+  }
+  
+  @Test
+  public void testRateLimitErrorDetection() throws Exception {
+    ServerSentEventClient testClient = new ServerSentEventClient(
+        "http://test.com", null, null, "TestApp/1.0",
+        true, null, null, 1000L, 30000L, -1, false);
+    
+    // Use reflection to test the isRateLimitError method
+    java.lang.reflect.Method isRateLimitErrorMethod = ServerSentEventClient.class
+        .getDeclaredMethod("isRateLimitError", Throwable.class);
+    isRateLimitErrorMethod.setAccessible(true);
+    
+    // Test various error messages
+    Exception rateLimitException = new Exception("HTTP 429 Too Many Requests");
+    Exception tooManyRequestsException = new Exception("Server responded with: too many requests");
+    Exception rateLimitTextException = new Exception("Rate limit exceeded");
+    Exception normalException = new Exception("Connection timeout");
+    
+    assertTrue((Boolean) isRateLimitErrorMethod.invoke(testClient, rateLimitException));
+    assertTrue((Boolean) isRateLimitErrorMethod.invoke(testClient, tooManyRequestsException));
+    assertTrue((Boolean) isRateLimitErrorMethod.invoke(testClient, rateLimitTextException));
+    assertFalse((Boolean) isRateLimitErrorMethod.invoke(testClient, normalException));
+    assertFalse((Boolean) isRateLimitErrorMethod.invoke(testClient, (Throwable) null));
+  }
+
+  @Test
   public void testGetRecords() throws InterruptedException {
     InboundSseEvent event1 = mock(InboundSseEvent.class);
     InboundSseEvent event2 = mock(InboundSseEvent.class);
@@ -226,5 +300,20 @@ public class ServerSentEventClientTest {
     
     // A failed connection should be considered unhealthy
     assertFalse(sseClient.isConnectionHealthy());
+  }
+  
+  @Test
+  public void testRobotsTxtConfiguration() throws Exception {
+    // Test that robots.txt checking can be enabled
+    ServerSentEventClient robotsEnabledClient = new ServerSentEventClient(
+        "http://test.com", null, null, "TestApp/1.0",
+        true, null, null, 1000L, 30000L, -1, true);
+    
+    // Verify the client was created successfully with robots.txt checking enabled
+    assertEquals("INITIALIZED", robotsEnabledClient.getConnectionState().toString());
+    
+    // Note: We can't easily test the actual robots.txt checking without
+    // setting up a mock HTTP server, but this test ensures the configuration
+    // parameter is properly accepted and the client initializes correctly.
   }
 }
