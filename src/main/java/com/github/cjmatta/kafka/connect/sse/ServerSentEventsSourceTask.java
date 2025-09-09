@@ -62,7 +62,6 @@ public class ServerSentEventsSourceTask extends SourceTask {
     long retryBackoffInitialMs = config.retryBackoffInitialMs;
     long retryBackoffMaxMs = config.retryBackoffMaxMs;
     int retryMaxAttempts = config.retryMaxAttempts;
-    boolean robotsTxtCheckEnabled = config.robotsTxtCheckEnabled;
     
     // Append contact info to user agent if provided
     if (config.contactInfo != null && !config.contactInfo.trim().isEmpty()) {
@@ -72,7 +71,7 @@ public class ServerSentEventsSourceTask extends SourceTask {
     // Create client with full configuration
     client = new ServerSentEventClient(sseUri, username, password, userAgent,
         compressionEnabled, rateLimitRequestsPerSecond, rateLimitMaxConcurrent,
-        retryBackoffInitialMs, retryBackoffMaxMs, retryMaxAttempts, robotsTxtCheckEnabled);
+        retryBackoffInitialMs, retryBackoffMaxMs, retryMaxAttempts);
 
     // Initialize metrics logging timer
     lastMetricsLogTime = System.currentTimeMillis();

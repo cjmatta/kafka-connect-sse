@@ -62,9 +62,6 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
   public static final String RETRY_MAX_ATTEMPTS = "retry.max.attempts";
   private static final String RETRY_MAX_ATTEMPTS_DOC = "Maximum number of retry attempts (-1 for unlimited)";
   
-  // Robots.txt compliance
-  public static final String ROBOTS_TXT_CHECK_ENABLED = "robots.txt.check.enabled";
-  private static final String ROBOTS_TXT_CHECK_ENABLED_DOC = "Enable robots.txt compliance checking before connecting";
 
   public final String sseUri;
   public final String topic;
@@ -81,7 +78,6 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
   public final Long retryBackoffInitialMs;
   public final Long retryBackoffMaxMs;
   public final Integer retryMaxAttempts;
-  public final Boolean robotsTxtCheckEnabled;
 
   public ServerSentEventsSourceConnectorConfig(Map<?, ?> originals) {
     super(config(), originals);
@@ -100,7 +96,6 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
     this.retryBackoffInitialMs = this.getLong(RETRY_BACKOFF_INITIAL_MS);
     this.retryBackoffMaxMs = this.getLong(RETRY_BACKOFF_MAX_MS);
     this.retryMaxAttempts = this.getInt(RETRY_MAX_ATTEMPTS);
-    this.robotsTxtCheckEnabled = this.getBoolean(ROBOTS_TXT_CHECK_ENABLED);
   }
 
 
@@ -194,13 +189,6 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
           .documentation(RETRY_MAX_ATTEMPTS_DOC)
           .importance(Importance.LOW)
           .defaultValue(-1)
-          .build()
-      )
-      .define(
-        ConfigKeyBuilder.of(ROBOTS_TXT_CHECK_ENABLED, Type.BOOLEAN)
-          .documentation(ROBOTS_TXT_CHECK_ENABLED_DOC)
-          .importance(Importance.LOW)
-          .defaultValue(false)
           .build()
       );
 

@@ -1,0 +1,18 @@
+{
+    "name": "Wikipedia SSE",
+    "config": {
+        "connector.class": "com.github.cjmatta.kafka.connect.sse.ServerSentEventsSourceConnector",
+        "kafka.auth.mode": "KAFKA_API_KEY",
+        "kafka.api.key": "WTVSJDQTRFOVUSPJ",
+        "kafka.api.secret": "93OFB0HWbUqUtCQqveWKx3kwvMCTImIi0JefS7/V9f3ih8BhF4sxOWDPX8D9rOW+",
+        "tasks.max": "1",
+        "confluent.custom.plugin.id": "ccp-q2kxd2",
+        "confluent.connector.type": "CUSTOM",
+        "confluent.custom.connection.endpoints": "stream.wikimedia.org:443",
+        "confluent.custom.schema.registry.auto": "true",
+        "key.converter": "io.confluent.connect.json.JsonSchemaConverter",
+        "sse.uri": "https://stream.wikimedia.org/v2/stream/recentchange",
+        "topic": "wikimedia-raw",
+        "value.converter": "io.confluent.connect.json.JsonSchemaConverter"
+    }
+}

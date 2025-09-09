@@ -13,7 +13,6 @@
  */
 package com.github.cjmatta.kafka.connect.sse;
 
-import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,7 +70,6 @@ public class ServerSentEventClient implements Closeable {
   private final long retryBackoffInitialMs;
   private final long retryBackoffMaxMs;
   private final int retryMaxAttempts;
-  private final boolean robotsTxtCheckEnabled;
   
   // Rate limiting fields
   private volatile long lastRequestTime = 0;
@@ -108,7 +106,7 @@ public class ServerSentEventClient implements Closeable {
    */
   public ServerSentEventClient(String url) {
     this(url, null, null, "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)", 
-         true, null, null, 2000L, 30000L, -1, false);
+         true, null, null, 2000L, 30000L, -1);
   }
 
   /**
@@ -120,7 +118,7 @@ public class ServerSentEventClient implements Closeable {
    */
   ServerSentEventClient(String url, String username, String password) {
     this(url, username, password, "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)", 
-         true, null, null, 2000L, 30000L, -1, false);
+         true, null, null, 2000L, 30000L, -1);
   }
 
   /**
@@ -139,7 +137,6 @@ public class ServerSentEventClient implements Closeable {
     this.retryBackoffInitialMs = 2000L;
     this.retryBackoffMaxMs = 30000L;
     this.retryMaxAttempts = -1;
-    this.robotsTxtCheckEnabled = false;
     this.queue = new LinkedBlockingDeque<>();
     this.sse = sse;
     this.connectionState = ConnectionState.INITIALIZED;
@@ -161,12 +158,11 @@ public class ServerSentEventClient implements Closeable {
    * @param retryBackoffInitialMs      Initial backoff time for retries
    * @param retryBackoffMaxMs          Maximum backoff time for retries
    * @param retryMaxAttempts           Maximum retry attempts (-1 for unlimited)
-   * @param robotsTxtCheckEnabled      Whether to check robots.txt before connecting
    */
   public ServerSentEventClient(String url, String username, String password, String userAgent,
                               boolean compressionEnabled, Double rateLimitRequestsPerSecond,
                               Integer rateLimitMaxConcurrent, long retryBackoffInitialMs,
-                              long retryBackoffMaxMs, int retryMaxAttempts, boolean robotsTxtCheckEnabled) {
+                              long retryBackoffMaxMs, int retryMaxAttempts) {
     log.info("Initializing SSE Client for URL: {} with enhanced configuration", url);
     this.client = createClient(compressionEnabled);
     this.source = client.target(url);
@@ -179,13 +175,12 @@ public class ServerSentEventClient implements Closeable {
     this.retryBackoffInitialMs = retryBackoffInitialMs;
     this.retryBackoffMaxMs = retryBackoffMaxMs;
     this.retryMaxAttempts = retryMaxAttempts;
-    this.robotsTxtCheckEnabled = robotsTxtCheckEnabled;
     this.queue = new LinkedBlockingDeque<>();
     this.connectionState = ConnectionState.INITIALIZED;
     this.lastEventTimestamp = System.currentTimeMillis();
     this.currentRetryAttempt = 0;
-    log.info("SSE Client initialized with User-Agent: {}, compression: {}, robots.txt check: {}", 
-             this.userAgent, compressionEnabled, robotsTxtCheckEnabled);
+    log.info("SSE Client initialized with User-Agent: {}, compression: {}", 
+             this.userAgent, compressionEnabled);
   }
 
   /**
@@ -231,36 +226,6 @@ public class ServerSentEventClient implements Closeable {
     lastRequestTime = System.currentTimeMillis();
   }
 
-  /**
-   * Checks robots.txt compliance for the target URL.
-   * 
-   * @throws IOException if robots.txt check fails or access is disallowed
-   */
-  private void checkRobotsTxtCompliance() throws IOException {
-    log.info("Checking robots.txt compliance for URL: {}", source.getUri());
-    
-    RobotsTxtChecker checker = null;
-    try {
-      checker = new RobotsTxtChecker(userAgent);
-      boolean accessAllowed = checker.isAccessAllowed(source.getUri().toString());
-      
-      if (!accessAllowed) {
-        throw new IOException("Access to " + source.getUri() + " is disallowed by robots.txt");
-      }
-      
-      log.info("robots.txt compliance check passed for: {}", source.getUri());
-      
-    } catch (Exception e) {
-      if (e instanceof IOException) {
-        throw (IOException) e;
-      }
-      throw new IOException("Failed to check robots.txt compliance", e);
-    } finally {
-      if (checker != null) {
-        checker.close();
-      }
-    }
-  }
 
   /**
    * Starts the SSE client connection to the source.
@@ -271,11 +236,6 @@ public class ServerSentEventClient implements Closeable {
   public void start() throws IOException {
     try {
       log.info("Starting SSE client connection to {}", source.getUri());
-      
-      // Check robots.txt compliance if enabled
-      if (robotsTxtCheckEnabled) {
-        checkRobotsTxtCompliance();
-      }
       
       setConnectionState(ConnectionState.CONNECTING);
       

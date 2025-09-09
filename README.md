@@ -38,7 +38,6 @@ A Kafka Connect source connector supporting the [Server Sent Events Standard](ht
 | user.agent                       | User-Agent header for HTTP requests          | no       | KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse) |
 | contact.info                     | Contact information to include in User-Agent | no       | -       |
 | compression.enabled              | Enable gzip compression                       | no       | true    |
-| robots.txt.check.enabled         | Enable robots.txt compliance checking        | no       | false   |
 
 ### Rate Limiting Configuration
 
@@ -172,7 +171,6 @@ contact.info=admin@mycompany.com
 rate.limit.requests.per.second=10
 rate.limit.max.concurrent=5
 compression.enabled=true
-robots.txt.check.enabled=true
 
 # Retry configuration
 retry.backoff.initial.ms=2000
@@ -214,12 +212,7 @@ When connecting to public SSE endpoints, especially those like Wikimedia, always
    compression.enabled=true
    ```
 
-4. **Check robots.txt compliance**: Respect server access policies
-   ```properties
-   robots.txt.check.enabled=true
-   ```
-
-5. **Configure reasonable retries**: Use exponential backoff for connection issues
+4. **Configure reasonable retries**: Use exponential backoff for connection issues
    ```properties
    retry.backoff.initial.ms=2000
    retry.backoff.max.ms=30000
