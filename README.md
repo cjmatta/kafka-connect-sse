@@ -14,13 +14,14 @@ A Kafka Connect source connector supporting the [Server Sent Events Standard](ht
 
 ## Configuration
 
-| Configuration Parameter  | Description                       | Required |
-|--------------------------|-----------------------------------|----------|
-| sse.uri                  | URI for the SSE stream            | yes      |
-| topic                    | Topic to send events to           | yes      |
-| http.basic.auth          | Weather or not use use basic auth | no       |
-| http.basic.auth.username | username                          | no       |
-| http.basic.auth.password | password                          | no       |
+| Configuration Parameter  | Description                          | Required |
+|--------------------------|--------------------------------------|----------|
+| sse.uri                  | URI for the SSE stream               | yes      |
+| topic                    | Topic to send events to              | yes      |
+| http.basic.auth          | Weather or not use use basic auth    | no       |
+| http.basic.auth.username | username                             | no       |
+| http.basic.auth.password | password                             | no       |
+| http.header.<Name>       | Set a HTTP request header Name=Value | no       |
 
 ## Building the Connector
 
