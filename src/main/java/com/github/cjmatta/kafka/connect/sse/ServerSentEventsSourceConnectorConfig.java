@@ -39,6 +39,7 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
   private static final String HTTP_BASIC_AUTH_USERNAME_DOC = "Username for HTTP basic authentication";
   public static final String HTTP_BASIC_AUTH_PASSWORD = "http.basic.auth.password";
   private static final String HTTP_BASIC_AUTH_PASSWORD_DOC = "Password for HTTP basic authentication";
+  public static final String HTTP_HEADER_PREFIX = "http.header.";
 
   public final String sseUri;
   public final String topic;
@@ -95,5 +96,8 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
 
   }
 
+  public Map<String, Object> getHttpHeaders() {
+    return originalsWithPrefix(HTTP_HEADER_PREFIX, true);
+  }
 
 }

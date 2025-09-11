@@ -7,11 +7,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.sse.InboundSseEvent;
-import javax.ws.rs.sse.SseEventSource;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.Invocation;
+import jakarta.ws.rs.client.WebTarget;
+import jakarta.ws.rs.sse.InboundSseEvent;
+import jakarta.ws.rs.sse.SseEventSource;
+
 import java.io.IOException;
 import java.net.URI;
 import java.util.Base64;
@@ -47,13 +48,17 @@ public class ServerSentEventClientTest {
     
     when(client.target(anyString())).thenReturn(webTarget);
     when(webTarget.request()).thenReturn(invocationBuilder);
+    when(invocationBuilder.header(eq("Authorization"), anyString())).thenReturn(invocationBuilder);
+    when(invocationBuilder.header(eq("Custom-Header"), anyString())).thenReturn(invocationBuilder);
+
     when(invocationBuilder.header(anyString(), anyString())).thenReturn(invocationBuilder);
     when(invocationBuilder.accept(anyString())).thenReturn(invocationBuilder);
     when(SseEventSource.target(webTarget)).thenReturn(sseEventSourceBuilder); // Mocking static method
     when(sseEventSourceBuilder.reconnectingEvery(anyLong(), any())).thenReturn(sseEventSourceBuilder);
     when(sseEventSourceBuilder.build()).thenReturn(sseEventSource);
 
-    sseClient = new ServerSentEventClient(client, webTarget, sseEventSource, "username", "password");
+    final Map<String, Object> headers = Map.of("Custom-Header", "HeaderValue");
+    sseClient = new ServerSentEventClient(client, webTarget, sseEventSource, null, "username", "password", headers);
   }
   @AfterEach
   public void tearDown() {
@@ -79,6 +84,14 @@ public class ServerSentEventClientTest {
 
     String expectedHeader = "Basic " + Base64.getEncoder().encodeToString("username:password".getBytes());
     verify(invocationBuilder).header("Authorization", expectedHeader);
+  }
+
+  @Test
+  public void testCustomRequestHeader() throws Exception {
+    sseClient.start();
+
+    final String expectedHeader = "HeaderValue";
+    verify(invocationBuilder).header("Custom-Header", expectedHeader);
   }
 
   @Test

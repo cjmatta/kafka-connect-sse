@@ -17,12 +17,13 @@ import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.sse.InboundSseEvent;
-import javax.ws.rs.sse.SseEventSource;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.ClientBuilder;
+import jakarta.ws.rs.client.Invocation;
+import jakarta.ws.rs.client.WebTarget;
+import jakarta.ws.rs.sse.InboundSseEvent;
+import jakarta.ws.rs.sse.SseEventSource;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Base64;
@@ -63,6 +64,9 @@ public class ServerSentEventClient implements Closeable {
   private final String username;
   private final String password;
   
+  // Additional headers
+  private final Map<String, Object> headers;
+
   // Track current connection state
   private volatile ConnectionState connectionState;
   // Store the last time an event was received
@@ -93,15 +97,7 @@ public class ServerSentEventClient implements Closeable {
    * @param url The URL of the SSE stream
    */
   public ServerSentEventClient(String url) {
-    log.info("Initializing SSE Client for URL: {}", url);
-    this.client = ClientBuilder.newClient();
-    this.source = client.target(url);
-    this.username = null;
-    this.password = null;
-    this.queue = new LinkedBlockingDeque<>();
-    this.connectionState = ConnectionState.INITIALIZED;
-    this.lastEventTimestamp = System.currentTimeMillis();
-    log.info("SSE Client initialized in state: {}", connectionState);
+    this(url, null, null);
   }
 
   /**
@@ -112,26 +108,23 @@ public class ServerSentEventClient implements Closeable {
    * @param password Password for basic authentication
    */
   ServerSentEventClient(String url, String username, String password) {
-    log.info("Initializing SSE Client for URL: {} with authentication", url);
-    this.client = ClientBuilder.newClient();
-    this.source = client.target(url);
-    this.username = username;
-    this.password = password;
-    this.queue = new LinkedBlockingDeque<>();
-    this.connectionState = ConnectionState.INITIALIZED;
-    this.lastEventTimestamp = System.currentTimeMillis();
-    log.info("SSE Client initialized in state: {}", connectionState);
+    this(null, null, null, url, username, password, null);
+  }
+
+  ServerSentEventClient(String url, String username, String password, Map<String, Object> headers) {
+    this(null, null, null, url, username, password, headers);
   }
 
   /**
    * Constructor for testing purposes.
    */
-  ServerSentEventClient(Client client, WebTarget source, SseEventSource sse, String username, String password) {
-    log.info("Initializing SSE Client for testing");
-    this.client = client;
-    this.source = source;
+  ServerSentEventClient(Client client, WebTarget source, SseEventSource sse, String url, String username, String password, Map<String, Object> headers) {
+    log.info("Initializing SSE Client");
+    this.client = client == null ? ClientBuilder.newClient() : client;
+    this.source = source == null ? this.client.target(url) : source;
     this.username = username;
     this.password = password;
+    this.headers = headers;
     this.queue = new LinkedBlockingDeque<>();
     this.sse = sse;
     this.connectionState = ConnectionState.INITIALIZED;
@@ -161,6 +154,14 @@ public class ServerSentEventClient implements Closeable {
         log.debug("Added Basic Authentication header");
       }
       
+      // Custom request headers
+      if (headers != null) {
+        for (Map.Entry<String, Object> entry : headers.entrySet()) {
+          builder.header(entry.getKey(), entry.getValue());
+          log.debug("Added custom header: {}={}", entry.getKey(), entry.getValue());
+        }
+      }
+
       log.debug("Configuring SSE event source with reconnection interval of 2 seconds");
       sse = SseEventSource
         .target(this.source)
