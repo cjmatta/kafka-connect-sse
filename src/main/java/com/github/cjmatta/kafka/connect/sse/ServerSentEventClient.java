@@ -15,6 +15,7 @@ package com.github.cjmatta.kafka.connect.sse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.glassfish.jersey.media.sse.SseFeature;
 
 import jakarta.ws.rs.client.Client;
 import jakarta.ws.rs.client.ClientBuilder;
@@ -196,6 +197,12 @@ public class ServerSentEventClient implements Closeable {
    */
   private Client createClient(boolean compressionEnabled) {
     ClientBuilder builder = ClientBuilder.newBuilder();
+    
+    // Disable Jersey's auto-discovery to avoid classloader conflicts in Kafka Connect
+    builder.property("jersey.config.client.disableAutoDiscovery", true);
+    
+    // Explicitly register SSE feature instead of relying on auto-discovery
+    builder.register(SseFeature.class);
     
     if (compressionEnabled) {
       // Jersey will automatically handle gzip compression when this property is set
