@@ -19,10 +19,11 @@ package com.github.cjmatta.kafka.connect.sse;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import com.github.jcustenborder.kafka.connect.utils.VersionUtil;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.sse.InboundSseEvent;
+import jakarta.ws.rs.sse.InboundSseEvent;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -55,7 +56,7 @@ public class ServerSentEventsSourceTask extends SourceTask {
     String sseUri = config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI);
     String username = config.httpBasicAuth ? config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_USERNAME) : null;
     String password = config.httpBasicAuth ? config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_PASSWORD) : null;
-    String userAgent = config.userAgent;
+    Map<String, Object> headers = config.getHttpHeaders();
     boolean compressionEnabled = config.compressionEnabled;
     Double rateLimitRequestsPerSecond = config.rateLimitRequestsPerSecond;
     Integer rateLimitMaxConcurrent = config.rateLimitMaxConcurrent;
@@ -63,13 +64,8 @@ public class ServerSentEventsSourceTask extends SourceTask {
     long retryBackoffMaxMs = config.retryBackoffMaxMs;
     int retryMaxAttempts = config.retryMaxAttempts;
     
-    // Append contact info to user agent if provided
-    if (config.contactInfo != null && !config.contactInfo.trim().isEmpty()) {
-      userAgent = userAgent + " (" + config.contactInfo.trim() + ")";
-    }
-    
     // Create client with full configuration
-    client = new ServerSentEventClient(sseUri, username, password, userAgent,
+    client = new ServerSentEventClient(sseUri, username, password, headers,
         compressionEnabled, rateLimitRequestsPerSecond, rateLimitMaxConcurrent,
         retryBackoffInitialMs, retryBackoffMaxMs, retryMaxAttempts);
 
@@ -137,6 +133,8 @@ public class ServerSentEventsSourceTask extends SourceTask {
 
   @Override
   public void stop() {
-    this.client.stop();
+    if(this.client != null) {
+      this.client.stop();
+    }
   }
 }

@@ -16,12 +16,13 @@ package com.github.cjmatta.kafka.connect.sse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.sse.InboundSseEvent;
-import javax.ws.rs.sse.SseEventSource;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.ClientBuilder;
+import jakarta.ws.rs.client.Invocation;
+import jakarta.ws.rs.client.WebTarget;
+import jakarta.ws.rs.sse.InboundSseEvent;
+import jakarta.ws.rs.sse.SseEventSource;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Base64;
@@ -62,8 +63,10 @@ public class ServerSentEventClient implements Closeable {
   private final String username;
   private final String password;
   
+  // Additional headers
+  private final Map<String, Object> headers;
+  
   // Store configuration for enhanced HTTP behavior
-  private final String userAgent;
   private final boolean compressionEnabled;
   private final Double rateLimitRequestsPerSecond;
   private final Integer rateLimitMaxConcurrent;
@@ -71,10 +74,10 @@ public class ServerSentEventClient implements Closeable {
   private final long retryBackoffMaxMs;
   private final int retryMaxAttempts;
   
-  // Rate limiting fields
+  // Rate limiting and retry fields
   private volatile long lastRequestTime = 0;
   private volatile int currentRetryAttempt = 0;
-  
+
   // Track current connection state
   private volatile ConnectionState connectionState;
   // Store the last time an event was received
@@ -105,8 +108,7 @@ public class ServerSentEventClient implements Closeable {
    * @param url The URL of the SSE stream
    */
   public ServerSentEventClient(String url) {
-    this(url, null, null, "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)", 
-         true, null, null, 2000L, 30000L, -1);
+    this(url, null, null);
   }
 
   /**
@@ -117,20 +119,61 @@ public class ServerSentEventClient implements Closeable {
    * @param password Password for basic authentication
    */
   ServerSentEventClient(String url, String username, String password) {
-    this(url, username, password, "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)", 
-         true, null, null, 2000L, 30000L, -1);
+    this(url, username, password, null, true, null, null, 2000L, 30000L, -1);
+  }
+
+  ServerSentEventClient(String url, String username, String password, Map<String, Object> headers) {
+    this(url, username, password, headers, true, null, null, 2000L, 30000L, -1);
+  }
+
+  /**
+   * Creates a new SSE client with full configuration.
+   *
+   * @param url                        The URL of the SSE stream
+   * @param username                   Username for basic authentication (null if not needed)
+   * @param password                   Password for basic authentication (null if not needed)
+   * @param headers                    Custom HTTP headers
+   * @param compressionEnabled         Whether to enable gzip compression
+   * @param rateLimitRequestsPerSecond Rate limit for requests per second (null if not needed)
+   * @param rateLimitMaxConcurrent     Maximum concurrent connections (null if not needed)
+   * @param retryBackoffInitialMs      Initial backoff time for retries
+   * @param retryBackoffMaxMs          Maximum backoff time for retries
+   * @param retryMaxAttempts           Maximum retry attempts (-1 for unlimited)
+   */
+  public ServerSentEventClient(String url, String username, String password, Map<String, Object> headers,
+                              boolean compressionEnabled, Double rateLimitRequestsPerSecond,
+                              Integer rateLimitMaxConcurrent, long retryBackoffInitialMs,
+                              long retryBackoffMaxMs, int retryMaxAttempts) {
+    log.info("Initializing SSE Client for URL: {} with enhanced configuration", url);
+    this.client = createClient(compressionEnabled);
+    this.source = client.target(url);
+    this.username = username;
+    this.password = password;
+    this.headers = headers;
+    this.compressionEnabled = compressionEnabled;
+    this.rateLimitRequestsPerSecond = rateLimitRequestsPerSecond;
+    this.rateLimitMaxConcurrent = rateLimitMaxConcurrent;
+    this.retryBackoffInitialMs = retryBackoffInitialMs;
+    this.retryBackoffMaxMs = retryBackoffMaxMs;
+    this.retryMaxAttempts = retryMaxAttempts;
+    this.queue = new LinkedBlockingDeque<>();
+    this.connectionState = ConnectionState.INITIALIZED;
+    this.lastEventTimestamp = System.currentTimeMillis();
+    this.currentRetryAttempt = 0;
+    log.info("SSE Client initialized with compression: {}, rate limit: {}/sec", 
+             compressionEnabled, rateLimitRequestsPerSecond);
   }
 
   /**
    * Constructor for testing purposes.
    */
-  ServerSentEventClient(Client client, WebTarget source, SseEventSource sse, String username, String password) {
+  ServerSentEventClient(Client client, WebTarget source, SseEventSource sse, String url, String username, String password, Map<String, Object> headers) {
     log.info("Initializing SSE Client for testing");
     this.client = client;
     this.source = source;
     this.username = username;
     this.password = password;
-    this.userAgent = "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)";
+    this.headers = headers;
     this.compressionEnabled = true;
     this.rateLimitRequestsPerSecond = null;
     this.rateLimitMaxConcurrent = null;
@@ -143,44 +186,6 @@ public class ServerSentEventClient implements Closeable {
     this.lastEventTimestamp = System.currentTimeMillis();
     this.currentRetryAttempt = 0;
     log.info("SSE Client initialized in state: {}", connectionState);
-  }
-
-  /**
-   * Creates a new SSE client with full configuration.
-   *
-   * @param url                        The URL of the SSE stream
-   * @param username                   Username for basic authentication (null if not needed)
-   * @param password                   Password for basic authentication (null if not needed)
-   * @param userAgent                  User-Agent header value
-   * @param compressionEnabled         Whether to enable gzip compression
-   * @param rateLimitRequestsPerSecond Rate limit for requests per second (null if not needed)
-   * @param rateLimitMaxConcurrent     Maximum concurrent connections (null if not needed)
-   * @param retryBackoffInitialMs      Initial backoff time for retries
-   * @param retryBackoffMaxMs          Maximum backoff time for retries
-   * @param retryMaxAttempts           Maximum retry attempts (-1 for unlimited)
-   */
-  public ServerSentEventClient(String url, String username, String password, String userAgent,
-                              boolean compressionEnabled, Double rateLimitRequestsPerSecond,
-                              Integer rateLimitMaxConcurrent, long retryBackoffInitialMs,
-                              long retryBackoffMaxMs, int retryMaxAttempts) {
-    log.info("Initializing SSE Client for URL: {} with enhanced configuration", url);
-    this.client = createClient(compressionEnabled);
-    this.source = client.target(url);
-    this.username = username;
-    this.password = password;
-    this.userAgent = userAgent != null ? userAgent : "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)";
-    this.compressionEnabled = compressionEnabled;
-    this.rateLimitRequestsPerSecond = rateLimitRequestsPerSecond;
-    this.rateLimitMaxConcurrent = rateLimitMaxConcurrent;
-    this.retryBackoffInitialMs = retryBackoffInitialMs;
-    this.retryBackoffMaxMs = retryBackoffMaxMs;
-    this.retryMaxAttempts = retryMaxAttempts;
-    this.queue = new LinkedBlockingDeque<>();
-    this.connectionState = ConnectionState.INITIALIZED;
-    this.lastEventTimestamp = System.currentTimeMillis();
-    this.currentRetryAttempt = 0;
-    log.info("SSE Client initialized with User-Agent: {}, compression: {}", 
-             this.userAgent, compressionEnabled);
   }
 
   /**
@@ -226,7 +231,6 @@ public class ServerSentEventClient implements Closeable {
     lastRequestTime = System.currentTimeMillis();
   }
 
-
   /**
    * Starts the SSE client connection to the source.
    * Registers handlers for events and errors.
@@ -236,20 +240,9 @@ public class ServerSentEventClient implements Closeable {
   public void start() throws IOException {
     try {
       log.info("Starting SSE client connection to {}", source.getUri());
-      
       setConnectionState(ConnectionState.CONNECTING);
       
       Invocation.Builder builder = this.source.request();
-      
-      // Apply User-Agent header
-      builder.header("User-Agent", userAgent);
-      log.debug("Added User-Agent header: {}", userAgent);
-      
-      // Apply compression headers if enabled
-      if (compressionEnabled) {
-        builder.header("Accept-Encoding", "gzip, deflate");
-        log.debug("Added compression headers");
-      }
       
       // Apply basic authentication if credentials are provided
       if (username != null && password != null) {
@@ -260,11 +253,33 @@ public class ServerSentEventClient implements Closeable {
         log.debug("Added Basic Authentication header");
       }
       
+      // Apply compression headers if enabled
+      if (compressionEnabled) {
+        builder.header("Accept-Encoding", "gzip, deflate");
+        log.debug("Added compression headers");
+      }
+      
+      // Apply default User-Agent if not provided in custom headers
+      boolean hasUserAgent = headers != null && headers.containsKey("User-Agent");
+      if (!hasUserAgent) {
+        String defaultUserAgent = "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)";
+        builder.header("User-Agent", defaultUserAgent);
+        log.debug("Added default User-Agent header: {}", defaultUserAgent);
+      }
+      
+      // Custom request headers (can override default User-Agent if specified)
+      if (headers != null) {
+        for (Map.Entry<String, Object> entry : headers.entrySet()) {
+          builder.header(entry.getKey(), entry.getValue());
+          log.debug("Added custom header: {}={}", entry.getKey(), entry.getValue());
+        }
+      }
+      
       // Apply rate limiting if configured
       if (rateLimitRequestsPerSecond != null && rateLimitRequestsPerSecond > 0) {
         applyRateLimit();
       }
-      
+
       long reconnectInterval = Math.min(retryBackoffInitialMs, 2000L);
       log.debug("Configuring SSE event source with reconnection interval of {} milliseconds", reconnectInterval);
       sse = SseEventSource
@@ -560,7 +575,7 @@ public class ServerSentEventClient implements Closeable {
   
   /**
    * Attempts to reconnect the SSE client when a connection issue is detected.
-   * Uses exponential backoff for retry delays.
+   * This method closes the existing connection and opens a new one.
    */
   private void attemptReconnection() {
     // Check if we've exceeded max retry attempts

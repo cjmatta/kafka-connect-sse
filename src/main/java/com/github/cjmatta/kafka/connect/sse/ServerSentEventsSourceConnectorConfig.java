@@ -39,12 +39,9 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
   private static final String HTTP_BASIC_AUTH_USERNAME_DOC = "Username for HTTP basic authentication";
   public static final String HTTP_BASIC_AUTH_PASSWORD = "http.basic.auth.password";
   private static final String HTTP_BASIC_AUTH_PASSWORD_DOC = "Password for HTTP basic authentication";
+  public static final String HTTP_HEADER_PREFIX = "http.header.";
   
-  // User-Agent and HTTP configuration
-  public static final String USER_AGENT = "user.agent";
-  private static final String USER_AGENT_DOC = "User-Agent header to send with HTTP requests. If not specified, a default will be used.";
-  public static final String CONTACT_INFO = "contact.info";
-  private static final String CONTACT_INFO_DOC = "Contact information to include in User-Agent header (optional)";
+  // Compression configuration
   public static final String COMPRESSION_ENABLED = "compression.enabled";
   private static final String COMPRESSION_ENABLED_DOC = "Enable gzip compression for HTTP requests";
   
@@ -61,7 +58,6 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
   private static final String RETRY_BACKOFF_MAX_MS_DOC = "Maximum backoff time in milliseconds for connection retries";
   public static final String RETRY_MAX_ATTEMPTS = "retry.max.attempts";
   private static final String RETRY_MAX_ATTEMPTS_DOC = "Maximum number of retry attempts (-1 for unlimited)";
-  
 
   public final String sseUri;
   public final String topic;
@@ -70,8 +66,6 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
   public final Password httpBasicAuthPassword;
   
   // New configuration fields
-  public final String userAgent;
-  public final String contactInfo;
   public final Boolean compressionEnabled;
   public final Double rateLimitRequestsPerSecond;
   public final Integer rateLimitMaxConcurrent;
@@ -88,8 +82,6 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
     this.httpBasicAuthPassword = this.getPassword(HTTP_BASIC_AUTH_PASSWORD);
     
     // Initialize new configuration fields
-    this.userAgent = this.getString(USER_AGENT);
-    this.contactInfo = this.getString(CONTACT_INFO);
     this.compressionEnabled = this.getBoolean(COMPRESSION_ENABLED);
     this.rateLimitRequestsPerSecond = this.getDouble(RATE_LIMIT_REQUESTS_PER_SECOND);
     this.rateLimitMaxConcurrent = this.getInt(RATE_LIMIT_MAX_CONCURRENT);
@@ -132,20 +124,6 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
         ConfigKeyBuilder.of(HTTP_BASIC_AUTH_PASSWORD, Type.PASSWORD)
           .documentation(HTTP_BASIC_AUTH_PASSWORD_DOC)
           .importance(Importance.MEDIUM)
-          .defaultValue(null)
-          .build()
-      )
-      .define(
-        ConfigKeyBuilder.of(USER_AGENT, Type.STRING)
-          .documentation(USER_AGENT_DOC)
-          .importance(Importance.LOW)
-          .defaultValue("KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)")
-          .build()
-      )
-      .define(
-        ConfigKeyBuilder.of(CONTACT_INFO, Type.STRING)
-          .documentation(CONTACT_INFO_DOC)
-          .importance(Importance.LOW)
           .defaultValue(null)
           .build()
       )
@@ -194,5 +172,8 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
 
   }
 
+  public Map<String, Object> getHttpHeaders() {
+    return originalsWithPrefix(HTTP_HEADER_PREFIX, true);
+  }
 
 }

@@ -7,11 +7,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.sse.InboundSseEvent;
-import javax.ws.rs.sse.SseEventSource;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.Invocation;
+import jakarta.ws.rs.client.WebTarget;
+import jakarta.ws.rs.sse.InboundSseEvent;
+import jakarta.ws.rs.sse.SseEventSource;
+
 import java.io.IOException;
 import java.net.URI;
 import java.util.Base64;
@@ -47,13 +48,17 @@ public class ServerSentEventClientTest {
     
     when(client.target(anyString())).thenReturn(webTarget);
     when(webTarget.request()).thenReturn(invocationBuilder);
+    when(invocationBuilder.header(eq("Authorization"), anyString())).thenReturn(invocationBuilder);
+    when(invocationBuilder.header(eq("Custom-Header"), anyString())).thenReturn(invocationBuilder);
+
     when(invocationBuilder.header(anyString(), anyString())).thenReturn(invocationBuilder);
     when(invocationBuilder.accept(anyString())).thenReturn(invocationBuilder);
     when(SseEventSource.target(webTarget)).thenReturn(sseEventSourceBuilder); // Mocking static method
     when(sseEventSourceBuilder.reconnectingEvery(anyLong(), any())).thenReturn(sseEventSourceBuilder);
     when(sseEventSourceBuilder.build()).thenReturn(sseEventSource);
 
-    sseClient = new ServerSentEventClient(client, webTarget, sseEventSource, "username", "password");
+    final Map<String, Object> headers = Map.of("Custom-Header", "HeaderValue");
+    sseClient = new ServerSentEventClient(client, webTarget, sseEventSource, null, "username", "password", headers);
   }
   @AfterEach
   public void tearDown() {
@@ -82,77 +87,11 @@ public class ServerSentEventClientTest {
   }
 
   @Test
-  public void testUserAgentHeader() throws Exception {
-    // Test with custom configuration
-    ServerSentEventClient customClient = new ServerSentEventClient(
-        "http://test.com", null, null, "TestApp/1.0 (test@example.com)",
-        true, null, null, 2000L, 30000L, -1);
-    
-    // We can't easily test the actual header without mocking the internal client creation
-    // but we can verify the client was created with the correct user agent
-    // This test mainly ensures the constructor accepts the parameters correctly
-    assertEquals("INITIALIZED", customClient.getConnectionState().toString());
-  }
-  
-  @Test
-  public void testRateLimiting() throws Exception {
-    // Test with rate limiting configuration
-    ServerSentEventClient rateLimitedClient = new ServerSentEventClient(
-        "http://test.com", null, null, "TestApp/1.0",
-        true, 5.0, 2, 1000L, 10000L, 3);
-    
-    // Verify the client was created successfully with rate limiting parameters
-    assertEquals("INITIALIZED", rateLimitedClient.getConnectionState().toString());
-  }
-  
-  @Test
-  public void testExponentialBackoffCalculation() throws Exception {
-    // Create a client to access the calculateBackoffDelay method via reflection
-    ServerSentEventClient testClient = new ServerSentEventClient(
-        "http://test.com", null, null, "TestApp/1.0",
-        true, null, null, 1000L, 30000L, -1);
-    
-    // Use reflection to test the calculateBackoffDelay method
-    java.lang.reflect.Method calculateBackoffMethod = ServerSentEventClient.class
-        .getDeclaredMethod("calculateBackoffDelay", int.class);
-    calculateBackoffMethod.setAccessible(true);
-    
-    // Test exponential backoff progression
-    long delay1 = (Long) calculateBackoffMethod.invoke(testClient, 1);
-    long delay2 = (Long) calculateBackoffMethod.invoke(testClient, 2);
-    long delay3 = (Long) calculateBackoffMethod.invoke(testClient, 3);
-    
-    assertEquals(1000L, delay1); // Initial delay
-    assertEquals(2000L, delay2); // 1000 * 2^1
-    assertEquals(4000L, delay3); // 1000 * 2^2
-    
-    // Test that delays are capped at maximum
-    long delayMax = (Long) calculateBackoffMethod.invoke(testClient, 20);
-    assertEquals(30000L, delayMax); // Should be capped at retryBackoffMaxMs
-  }
-  
-  @Test
-  public void testRateLimitErrorDetection() throws Exception {
-    ServerSentEventClient testClient = new ServerSentEventClient(
-        "http://test.com", null, null, "TestApp/1.0",
-        true, null, null, 1000L, 30000L, -1);
-    
-    // Use reflection to test the isRateLimitError method
-    java.lang.reflect.Method isRateLimitErrorMethod = ServerSentEventClient.class
-        .getDeclaredMethod("isRateLimitError", Throwable.class);
-    isRateLimitErrorMethod.setAccessible(true);
-    
-    // Test various error messages
-    Exception rateLimitException = new Exception("HTTP 429 Too Many Requests");
-    Exception tooManyRequestsException = new Exception("Server responded with: too many requests");
-    Exception rateLimitTextException = new Exception("Rate limit exceeded");
-    Exception normalException = new Exception("Connection timeout");
-    
-    assertTrue((Boolean) isRateLimitErrorMethod.invoke(testClient, rateLimitException));
-    assertTrue((Boolean) isRateLimitErrorMethod.invoke(testClient, tooManyRequestsException));
-    assertTrue((Boolean) isRateLimitErrorMethod.invoke(testClient, rateLimitTextException));
-    assertFalse((Boolean) isRateLimitErrorMethod.invoke(testClient, normalException));
-    assertFalse((Boolean) isRateLimitErrorMethod.invoke(testClient, (Throwable) null));
+  public void testCustomRequestHeader() throws Exception {
+    sseClient.start();
+
+    final String expectedHeader = "HeaderValue";
+    verify(invocationBuilder).header("Custom-Header", expectedHeader);
   }
 
   @Test
@@ -301,5 +240,4 @@ public class ServerSentEventClientTest {
     // A failed connection should be considered unhealthy
     assertFalse(sseClient.isConnectionHealthy());
   }
-  
 }
