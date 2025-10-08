@@ -34,7 +34,7 @@ http.header.X-Custom-Header=CustomValue
 
 **Default User-Agent:** If no `User-Agent` header is explicitly configured, the connector automatically sends:
 ```
-KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)
+KafkaConnectSSE/1.4 (https://github.com/cjmatta/kafka-connect-sse)
 ```
 
 This default User-Agent helps comply with robot policies for public SSE endpoints like Wikimedia. You can override it by setting `http.header.User-Agent` to your preferred value.
@@ -73,7 +73,7 @@ cd kafka-connect-sse
 mvn clean package
 ```
 
-This will create a ZIP file at `target/components/packages/cjmatta-kafka-connect-sse-1.2.zip` that can be used to deploy the connector.
+This will create a ZIP file at `target/components/packages/cjmatta-kafka-connect-sse-1.4.zip` that can be used to deploy the connector.
 
 ## Deployment Options
 
@@ -104,7 +104,7 @@ curl -X POST -H "Content-Type: application/json" \
 1. Use Confluent Hub to install the connector:
 
 ```bash
-confluent-hub install cjmatta/kafka-connect-sse:1.2
+confluent-hub install cjmatta/kafka-connect-sse:1.4
 ```
 
 2. Restart Kafka Connect

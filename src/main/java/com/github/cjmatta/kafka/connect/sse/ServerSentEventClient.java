@@ -262,7 +262,7 @@ public class ServerSentEventClient implements Closeable {
       // Apply default User-Agent if not provided in custom headers
       boolean hasUserAgent = headers != null && headers.containsKey("User-Agent");
       if (!hasUserAgent) {
-        String defaultUserAgent = "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)";
+        String defaultUserAgent = "KafkaConnectSSE/1.4 (https://github.com/cjmatta/kafka-connect-sse)";
         builder.header("User-Agent", defaultUserAgent);
         log.debug("Added default User-Agent header: {}", defaultUserAgent);
       }
