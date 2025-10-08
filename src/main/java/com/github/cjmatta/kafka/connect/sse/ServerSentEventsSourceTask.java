@@ -23,7 +23,7 @@ import com.github.jcustenborder.kafka.connect.utils.VersionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import jakarta.ws.rs.sse.InboundSseEvent;
+import javax.ws.rs.sse.InboundSseEvent;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedList;

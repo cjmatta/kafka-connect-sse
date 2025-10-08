@@ -37,26 +37,32 @@ mvn clean package -DskipTests
 echo -e "${GREEN}✓ Connector built${NC}"
 echo
 
-# Step 2: Start Docker Compose
-echo -e "${BLUE}Step 2: Starting Docker Compose services...${NC}"
+# Step 2: Build Docker image with connector
+echo -e "${BLUE}Step 2: Building Connect Docker image with connector...${NC}"
+docker-compose build connect
+echo -e "${GREEN}✓ Docker image built${NC}"
+echo
+
+# Step 3: Start Docker Compose
+echo -e "${BLUE}Step 3: Starting Docker Compose services...${NC}"
 docker-compose up -d
 echo -e "${GREEN}✓ Services started${NC}"
 echo
 
-# Step 3: Wait for services
-echo -e "${BLUE}Step 3: Waiting for services to be ready...${NC}"
+# Step 4: Wait for services
+echo -e "${BLUE}Step 4: Waiting for services to be ready...${NC}"
 wait_for_service "http://localhost:9092" "Kafka Broker"
 wait_for_service "http://localhost:8081" "Schema Registry"
 wait_for_service "http://localhost:8083" "Kafka Connect"
 echo
 
-# Step 4: Check installed connectors
-echo -e "${BLUE}Step 4: Checking available connector plugins...${NC}"
+# Step 5: Check installed connectors
+echo -e "${BLUE}Step 5: Checking available connector plugins...${NC}"
 curl -s http://localhost:8083/connector-plugins | jq -r '.[] | select(.class | contains("ServerSentEvents")) | .class'
 echo
 
-# Step 5: Deploy the connector
-echo -e "${BLUE}Step 5: Deploying Wikipedia SSE connector...${NC}"
+# Step 6: Deploy the connector
+echo -e "${BLUE}Step 6: Deploying Wikipedia SSE connector...${NC}"
 curl -X POST http://localhost:8083/connectors \
   -H "Content-Type: application/json" \
   -d @config/wikipedia-connector.json | jq '.'
@@ -64,8 +70,8 @@ echo
 echo -e "${GREEN}✓ Connector deployed${NC}"
 echo
 
-# Step 6: Check connector status
-echo -e "${BLUE}Step 6: Checking connector status...${NC}"
+# Step 7: Check connector status
+echo -e "${BLUE}Step 7: Checking connector status...${NC}"
 sleep 5
 curl -s http://localhost:8083/connectors/wikipedia-sse-connector/status | jq '.'
 echo

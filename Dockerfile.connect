@@ -1,0 +1,8 @@
+FROM confluentinc/cp-kafka-connect:7.3.0
+
+# Copy the connector ZIP file
+COPY target/components/packages/cjmatta-kafka-connect-sse-1.4.zip /tmp/
+
+# Install the connector using confluent-hub (installs to /usr/share/confluent-hub-components)
+RUN confluent-hub install --no-prompt /tmp/cjmatta-kafka-connect-sse-1.4.zip
+

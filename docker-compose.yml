@@ -54,7 +54,10 @@ services:
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
 
   connect:
-    image: confluentinc/cp-kafka-connect:7.3.0
+    build:
+      context: .
+      dockerfile: Dockerfile.connect
+    image: kafka-connect-sse:local
     hostname: connect
     container_name: connect
     depends_on:
@@ -62,8 +65,6 @@ services:
       - schema-registry
     ports:
       - "8083:8083"
-    volumes:
-      - ./target/components/packages:/usr/share/confluent-hub-components
     environment:
       CONNECT_BOOTSTRAP_SERVERS: 'broker:29092'
       CONNECT_REST_ADVERTISED_HOST_NAME: connect
