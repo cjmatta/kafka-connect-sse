@@ -108,3 +108,6 @@ target
 *.code-workspace
 
 .classpath
+
+# macOS
+.DS_Store

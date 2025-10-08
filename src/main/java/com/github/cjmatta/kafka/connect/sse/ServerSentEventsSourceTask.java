@@ -51,12 +51,18 @@ public class ServerSentEventsSourceTask extends SourceTask {
   public void start(Map<String, String> map) {
     log.info("Starting Server Sent Events Source Task");
     config = new ServerSentEventsSourceConnectorConfig(map);
+    
+    // Extract custom headers from configuration
+    Map<String, Object> headers = config.getHttpHeaders();
+    
     if(config.httpBasicAuth) {
       client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI),
           config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_USERNAME),
-          config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_PASSWORD));
+          config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_PASSWORD),
+          headers);
     } else {
-      client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI));
+      client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI),
+          null, null, headers);
     }
 
     // Initialize metrics logging timer

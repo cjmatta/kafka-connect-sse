@@ -23,6 +23,22 @@ A Kafka Connect source connector supporting the [Server Sent Events Standard](ht
 | http.basic.auth.password | password                             | no       |
 | http.header.<Name>       | Set a HTTP request header Name=Value | no       |
 
+### Custom HTTP Headers
+
+You can set custom HTTP headers using the `http.header.<Name>` configuration pattern. For example:
+
+```properties
+http.header.User-Agent=MyApp/1.0 (https://example.com; contact@example.com)
+http.header.X-Custom-Header=CustomValue
+```
+
+**Default User-Agent:** If no `User-Agent` header is explicitly configured, the connector automatically sends:
+```
+KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)
+```
+
+This default User-Agent helps comply with robot policies for public SSE endpoints like Wikimedia. You can override it by setting `http.header.User-Agent` to your preferred value.
+
 ## Building the Connector
 
 To build the connector, you need Maven and Java 8 or higher installed on your system.

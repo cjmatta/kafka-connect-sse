@@ -13,7 +13,6 @@
  */
 package com.github.cjmatta.kafka.connect.sse;
 
-import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -154,7 +153,15 @@ public class ServerSentEventClient implements Closeable {
         log.debug("Added Basic Authentication header");
       }
       
-      // Custom request headers
+      // Apply default User-Agent if not provided in custom headers
+      boolean hasUserAgent = headers != null && headers.containsKey("User-Agent");
+      if (!hasUserAgent) {
+        String defaultUserAgent = "KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)";
+        builder.header("User-Agent", defaultUserAgent);
+        log.debug("Added default User-Agent header: {}", defaultUserAgent);
+      }
+      
+      // Custom request headers (can override default User-Agent if specified)
       if (headers != null) {
         for (Map.Entry<String, Object> entry : headers.entrySet()) {
           builder.header(entry.getKey(), entry.getValue());
