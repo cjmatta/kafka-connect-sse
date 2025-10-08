@@ -39,6 +39,27 @@ KafkaConnectSSE/1.3 (https://github.com/cjmatta/kafka-connect-sse)
 
 This default User-Agent helps comply with robot policies for public SSE endpoints like Wikimedia. You can override it by setting `http.header.User-Agent` to your preferred value.
 
+### HTTP Client Configuration
+
+| Configuration Parameter          | Description                                    | Required | Default |
+|----------------------------------|------------------------------------------------|----------|---------|
+| compression.enabled              | Enable gzip compression                        | no       | true    |
+
+### Rate Limiting Configuration
+
+| Configuration Parameter              | Description                                   | Required | Default |
+|--------------------------------------|-----------------------------------------------|----------|---------|
+| rate.limit.requests.per.second      | Maximum requests per second (optional)         | no       | -       |
+| rate.limit.max.concurrent           | Maximum concurrent connections (optional)      | no       | -       |
+
+### Retry Configuration
+
+| Configuration Parameter    | Description                                  | Required | Default |
+|----------------------------|----------------------------------------------|----------|---------|
+| retry.backoff.initial.ms   | Initial backoff time for retries (ms)       | no       | 2000    |
+| retry.backoff.max.ms       | Maximum backoff time for retries (ms)       | no       | 30000   |
+| retry.max.attempts         | Maximum retry attempts (-1 for unlimited)    | no       | -1      |
+
 ## Building the Connector
 
 To build the connector, you need Maven and Java 8 or higher installed on your system.

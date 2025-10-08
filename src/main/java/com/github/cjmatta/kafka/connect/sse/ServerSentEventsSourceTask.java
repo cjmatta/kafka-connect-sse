@@ -52,18 +52,22 @@ public class ServerSentEventsSourceTask extends SourceTask {
     log.info("Starting Server Sent Events Source Task");
     config = new ServerSentEventsSourceConnectorConfig(map);
     
-    // Extract custom headers from configuration
+    // Extract configuration values
+    String sseUri = config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI);
+    String username = config.httpBasicAuth ? config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_USERNAME) : null;
+    String password = config.httpBasicAuth ? config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_PASSWORD) : null;
     Map<String, Object> headers = config.getHttpHeaders();
+    boolean compressionEnabled = config.compressionEnabled;
+    Double rateLimitRequestsPerSecond = config.rateLimitRequestsPerSecond;
+    Integer rateLimitMaxConcurrent = config.rateLimitMaxConcurrent;
+    long retryBackoffInitialMs = config.retryBackoffInitialMs;
+    long retryBackoffMaxMs = config.retryBackoffMaxMs;
+    int retryMaxAttempts = config.retryMaxAttempts;
     
-    if(config.httpBasicAuth) {
-      client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI),
-          config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_USERNAME),
-          config.getString(ServerSentEventsSourceConnectorConfig.HTTP_BASIC_AUTH_PASSWORD),
-          headers);
-    } else {
-      client = new ServerSentEventClient(config.getString(ServerSentEventsSourceConnectorConfig.SSE_URI),
-          null, null, headers);
-    }
+    // Create client with full configuration
+    client = new ServerSentEventClient(sseUri, username, password, headers,
+        compressionEnabled, rateLimitRequestsPerSecond, rateLimitMaxConcurrent,
+        retryBackoffInitialMs, retryBackoffMaxMs, retryMaxAttempts);
 
     // Initialize metrics logging timer
     lastMetricsLogTime = System.currentTimeMillis();

@@ -40,12 +40,38 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
   public static final String HTTP_BASIC_AUTH_PASSWORD = "http.basic.auth.password";
   private static final String HTTP_BASIC_AUTH_PASSWORD_DOC = "Password for HTTP basic authentication";
   public static final String HTTP_HEADER_PREFIX = "http.header.";
+  
+  // Compression configuration
+  public static final String COMPRESSION_ENABLED = "compression.enabled";
+  private static final String COMPRESSION_ENABLED_DOC = "Enable gzip compression for HTTP requests";
+  
+  // Rate limiting configuration
+  public static final String RATE_LIMIT_REQUESTS_PER_SECOND = "rate.limit.requests.per.second";
+  private static final String RATE_LIMIT_REQUESTS_PER_SECOND_DOC = "Maximum number of requests per second (optional rate limiting)";
+  public static final String RATE_LIMIT_MAX_CONCURRENT = "rate.limit.max.concurrent";
+  private static final String RATE_LIMIT_MAX_CONCURRENT_DOC = "Maximum number of concurrent connections (optional rate limiting)";
+  
+  // Retry configuration
+  public static final String RETRY_BACKOFF_INITIAL_MS = "retry.backoff.initial.ms";
+  private static final String RETRY_BACKOFF_INITIAL_MS_DOC = "Initial backoff time in milliseconds for connection retries";
+  public static final String RETRY_BACKOFF_MAX_MS = "retry.backoff.max.ms";
+  private static final String RETRY_BACKOFF_MAX_MS_DOC = "Maximum backoff time in milliseconds for connection retries";
+  public static final String RETRY_MAX_ATTEMPTS = "retry.max.attempts";
+  private static final String RETRY_MAX_ATTEMPTS_DOC = "Maximum number of retry attempts (-1 for unlimited)";
 
   public final String sseUri;
   public final String topic;
   public final Boolean httpBasicAuth;
   public final String httpBasicAuthUsername;
   public final Password httpBasicAuthPassword;
+  
+  // New configuration fields
+  public final Boolean compressionEnabled;
+  public final Double rateLimitRequestsPerSecond;
+  public final Integer rateLimitMaxConcurrent;
+  public final Long retryBackoffInitialMs;
+  public final Long retryBackoffMaxMs;
+  public final Integer retryMaxAttempts;
 
   public ServerSentEventsSourceConnectorConfig(Map<?, ?> originals) {
     super(config(), originals);
@@ -54,6 +80,14 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
     this.httpBasicAuth = this.getBoolean(HTTP_BASIC_AUTH);
     this.httpBasicAuthUsername = this.getString(HTTP_BASIC_AUTH_USERNAME);
     this.httpBasicAuthPassword = this.getPassword(HTTP_BASIC_AUTH_PASSWORD);
+    
+    // Initialize new configuration fields
+    this.compressionEnabled = this.getBoolean(COMPRESSION_ENABLED);
+    this.rateLimitRequestsPerSecond = this.getDouble(RATE_LIMIT_REQUESTS_PER_SECOND);
+    this.rateLimitMaxConcurrent = this.getInt(RATE_LIMIT_MAX_CONCURRENT);
+    this.retryBackoffInitialMs = this.getLong(RETRY_BACKOFF_INITIAL_MS);
+    this.retryBackoffMaxMs = this.getLong(RETRY_BACKOFF_MAX_MS);
+    this.retryMaxAttempts = this.getInt(RETRY_MAX_ATTEMPTS);
   }
 
 
@@ -91,6 +125,48 @@ public class ServerSentEventsSourceConnectorConfig extends AbstractConfig {
           .documentation(HTTP_BASIC_AUTH_PASSWORD_DOC)
           .importance(Importance.MEDIUM)
           .defaultValue(null)
+          .build()
+      )
+      .define(
+        ConfigKeyBuilder.of(COMPRESSION_ENABLED, Type.BOOLEAN)
+          .documentation(COMPRESSION_ENABLED_DOC)
+          .importance(Importance.LOW)
+          .defaultValue(true)
+          .build()
+      )
+      .define(
+        ConfigKeyBuilder.of(RATE_LIMIT_REQUESTS_PER_SECOND, Type.DOUBLE)
+          .documentation(RATE_LIMIT_REQUESTS_PER_SECOND_DOC)
+          .importance(Importance.LOW)
+          .defaultValue(null)
+          .build()
+      )
+      .define(
+        ConfigKeyBuilder.of(RATE_LIMIT_MAX_CONCURRENT, Type.INT)
+          .documentation(RATE_LIMIT_MAX_CONCURRENT_DOC)
+          .importance(Importance.LOW)
+          .defaultValue(null)
+          .build()
+      )
+      .define(
+        ConfigKeyBuilder.of(RETRY_BACKOFF_INITIAL_MS, Type.LONG)
+          .documentation(RETRY_BACKOFF_INITIAL_MS_DOC)
+          .importance(Importance.LOW)
+          .defaultValue(2000L)
+          .build()
+      )
+      .define(
+        ConfigKeyBuilder.of(RETRY_BACKOFF_MAX_MS, Type.LONG)
+          .documentation(RETRY_BACKOFF_MAX_MS_DOC)
+          .importance(Importance.LOW)
+          .defaultValue(30000L)
+          .build()
+      )
+      .define(
+        ConfigKeyBuilder.of(RETRY_MAX_ATTEMPTS, Type.INT)
+          .documentation(RETRY_MAX_ATTEMPTS_DOC)
+          .importance(Importance.LOW)
+          .defaultValue(-1)
           .build()
       );
 

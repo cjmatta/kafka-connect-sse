@@ -65,6 +65,18 @@ public class ServerSentEventClient implements Closeable {
   
   // Additional headers
   private final Map<String, Object> headers;
+  
+  // Store configuration for enhanced HTTP behavior
+  private final boolean compressionEnabled;
+  private final Double rateLimitRequestsPerSecond;
+  private final Integer rateLimitMaxConcurrent;
+  private final long retryBackoffInitialMs;
+  private final long retryBackoffMaxMs;
+  private final int retryMaxAttempts;
+  
+  // Rate limiting and retry fields
+  private volatile long lastRequestTime = 0;
+  private volatile int currentRetryAttempt = 0;
 
   // Track current connection state
   private volatile ConnectionState connectionState;
@@ -107,28 +119,116 @@ public class ServerSentEventClient implements Closeable {
    * @param password Password for basic authentication
    */
   ServerSentEventClient(String url, String username, String password) {
-    this(null, null, null, url, username, password, null);
+    this(url, username, password, null, true, null, null, 2000L, 30000L, -1);
   }
 
   ServerSentEventClient(String url, String username, String password, Map<String, Object> headers) {
-    this(null, null, null, url, username, password, headers);
+    this(url, username, password, headers, true, null, null, 2000L, 30000L, -1);
+  }
+
+  /**
+   * Creates a new SSE client with full configuration.
+   *
+   * @param url                        The URL of the SSE stream
+   * @param username                   Username for basic authentication (null if not needed)
+   * @param password                   Password for basic authentication (null if not needed)
+   * @param headers                    Custom HTTP headers
+   * @param compressionEnabled         Whether to enable gzip compression
+   * @param rateLimitRequestsPerSecond Rate limit for requests per second (null if not needed)
+   * @param rateLimitMaxConcurrent     Maximum concurrent connections (null if not needed)
+   * @param retryBackoffInitialMs      Initial backoff time for retries
+   * @param retryBackoffMaxMs          Maximum backoff time for retries
+   * @param retryMaxAttempts           Maximum retry attempts (-1 for unlimited)
+   */
+  public ServerSentEventClient(String url, String username, String password, Map<String, Object> headers,
+                              boolean compressionEnabled, Double rateLimitRequestsPerSecond,
+                              Integer rateLimitMaxConcurrent, long retryBackoffInitialMs,
+                              long retryBackoffMaxMs, int retryMaxAttempts) {
+    log.info("Initializing SSE Client for URL: {} with enhanced configuration", url);
+    this.client = createClient(compressionEnabled);
+    this.source = client.target(url);
+    this.username = username;
+    this.password = password;
+    this.headers = headers;
+    this.compressionEnabled = compressionEnabled;
+    this.rateLimitRequestsPerSecond = rateLimitRequestsPerSecond;
+    this.rateLimitMaxConcurrent = rateLimitMaxConcurrent;
+    this.retryBackoffInitialMs = retryBackoffInitialMs;
+    this.retryBackoffMaxMs = retryBackoffMaxMs;
+    this.retryMaxAttempts = retryMaxAttempts;
+    this.queue = new LinkedBlockingDeque<>();
+    this.connectionState = ConnectionState.INITIALIZED;
+    this.lastEventTimestamp = System.currentTimeMillis();
+    this.currentRetryAttempt = 0;
+    log.info("SSE Client initialized with compression: {}, rate limit: {}/sec", 
+             compressionEnabled, rateLimitRequestsPerSecond);
   }
 
   /**
    * Constructor for testing purposes.
    */
   ServerSentEventClient(Client client, WebTarget source, SseEventSource sse, String url, String username, String password, Map<String, Object> headers) {
-    log.info("Initializing SSE Client");
-    this.client = client == null ? ClientBuilder.newClient() : client;
-    this.source = source == null ? this.client.target(url) : source;
+    log.info("Initializing SSE Client for testing");
+    this.client = client;
+    this.source = source;
     this.username = username;
     this.password = password;
     this.headers = headers;
+    this.compressionEnabled = true;
+    this.rateLimitRequestsPerSecond = null;
+    this.rateLimitMaxConcurrent = null;
+    this.retryBackoffInitialMs = 2000L;
+    this.retryBackoffMaxMs = 30000L;
+    this.retryMaxAttempts = -1;
     this.queue = new LinkedBlockingDeque<>();
     this.sse = sse;
     this.connectionState = ConnectionState.INITIALIZED;
     this.lastEventTimestamp = System.currentTimeMillis();
+    this.currentRetryAttempt = 0;
     log.info("SSE Client initialized in state: {}", connectionState);
+  }
+
+  /**
+   * Creates and configures the HTTP client based on configuration.
+   * 
+   * @param compressionEnabled Whether to enable gzip compression
+   * @return Configured Jersey Client
+   */
+  private Client createClient(boolean compressionEnabled) {
+    ClientBuilder builder = ClientBuilder.newBuilder();
+    
+    if (compressionEnabled) {
+      // Jersey will automatically handle gzip compression when this property is set
+      builder.property("jersey.config.client.useEncoding", "gzip");
+    }
+    
+    return builder.build();
+  }
+
+  /**
+   * Applies rate limiting by sleeping if necessary to respect the configured requests per second.
+   */
+  private void applyRateLimit() {
+    if (rateLimitRequestsPerSecond == null || rateLimitRequestsPerSecond <= 0) {
+      return;
+    }
+    
+    long currentTime = System.currentTimeMillis();
+    long timeSinceLastRequest = currentTime - lastRequestTime;
+    long minIntervalMs = (long) (1000.0 / rateLimitRequestsPerSecond);
+    
+    if (timeSinceLastRequest < minIntervalMs) {
+      long sleepTime = minIntervalMs - timeSinceLastRequest;
+      log.debug("Rate limiting: sleeping for {} ms to respect {} requests/second", sleepTime, rateLimitRequestsPerSecond);
+      try {
+        Thread.sleep(sleepTime);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        log.warn("Rate limiting sleep interrupted", e);
+      }
+    }
+    
+    lastRequestTime = System.currentTimeMillis();
   }
 
   /**
@@ -153,6 +253,12 @@ public class ServerSentEventClient implements Closeable {
         log.debug("Added Basic Authentication header");
       }
       
+      // Apply compression headers if enabled
+      if (compressionEnabled) {
+        builder.header("Accept-Encoding", "gzip, deflate");
+        log.debug("Added compression headers");
+      }
+      
       // Apply default User-Agent if not provided in custom headers
       boolean hasUserAgent = headers != null && headers.containsKey("User-Agent");
       if (!hasUserAgent) {
@@ -168,11 +274,17 @@ public class ServerSentEventClient implements Closeable {
           log.debug("Added custom header: {}={}", entry.getKey(), entry.getValue());
         }
       }
+      
+      // Apply rate limiting if configured
+      if (rateLimitRequestsPerSecond != null && rateLimitRequestsPerSecond > 0) {
+        applyRateLimit();
+      }
 
-      log.debug("Configuring SSE event source with reconnection interval of 2 seconds");
+      long reconnectInterval = Math.min(retryBackoffInitialMs, 2000L);
+      log.debug("Configuring SSE event source with reconnection interval of {} milliseconds", reconnectInterval);
       sse = SseEventSource
         .target(this.source)
-        .reconnectingEvery(2, TimeUnit.SECONDS)
+        .reconnectingEvery(reconnectInterval, TimeUnit.MILLISECONDS)
         .build();
 
       sse.register(this::onMessage, this::onError);
@@ -466,9 +578,25 @@ public class ServerSentEventClient implements Closeable {
    * This method closes the existing connection and opens a new one.
    */
   private void attemptReconnection() {
-    log.info("Attempting to reconnect SSE client due to connection issue");
+    // Check if we've exceeded max retry attempts
+    if (retryMaxAttempts != -1 && currentRetryAttempt >= retryMaxAttempts) {
+      log.error("Maximum retry attempts ({}) exceeded, giving up reconnection", retryMaxAttempts);
+      setConnectionState(ConnectionState.FAILED);
+      return;
+    }
+    
+    currentRetryAttempt++;
+    
+    // Calculate exponential backoff delay
+    long backoffMs = calculateBackoffDelay(currentRetryAttempt);
+    log.info("Attempting reconnection #{} with {}ms backoff due to connection issue", currentRetryAttempt, backoffMs);
     
     try {
+      // Apply exponential backoff delay
+      if (backoffMs > 0) {
+        Thread.sleep(backoffMs);
+      }
+      
       // Close existing connection
       stop();
       
@@ -477,15 +605,67 @@ public class ServerSentEventClient implements Closeable {
       
       // Attempt to establish a new connection
       start();
-      log.info("Successfully reconnected SSE client");
+      log.info("Successfully reconnected SSE client on attempt #{}", currentRetryAttempt);
       totalReconnections.incrementAndGet();
       lastReconnectTime = System.currentTimeMillis();
+      // Reset retry counter on successful connection
+      currentRetryAttempt = 0;
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      log.warn("Reconnection attempt interrupted", e);
+      setConnectionState(ConnectionState.FAILED);
+      error = e;
     } catch (IOException e) {
-      log.error("Failed to reconnect SSE client: {}", e.getMessage(), e);
+      log.error("Failed to reconnect SSE client on attempt #{}: {}", currentRetryAttempt, e.getMessage(), e);
       setConnectionState(ConnectionState.FAILED);
       error = e;
       totalConnectionErrors.incrementAndGet();
+      
+      // Check if this was a rate limiting error (HTTP 429)
+      if (isRateLimitError(e)) {
+        log.warn("Rate limit error detected, extending backoff time");
+        // Rate limit errors get longer backoffs
+        currentRetryAttempt = Math.max(currentRetryAttempt, 3);
+      }
     }
+  }
+  
+  /**
+   * Calculates the exponential backoff delay for the given retry attempt.
+   * 
+   * @param attempt The retry attempt number (1-based)
+   * @return The backoff delay in milliseconds
+   */
+  private long calculateBackoffDelay(int attempt) {
+    if (attempt <= 1) {
+      return retryBackoffInitialMs;
+    }
+    
+    // Exponential backoff: initial * 2^(attempt-1), capped at max
+    long delay = retryBackoffInitialMs * (long) Math.pow(2, attempt - 1);
+    return Math.min(delay, retryBackoffMaxMs);
+  }
+  
+  /**
+   * Checks if an exception indicates a rate limiting error.
+   * 
+   * @param exception The exception to check
+   * @return true if the exception indicates rate limiting
+   */
+  private boolean isRateLimitError(Throwable exception) {
+    if (exception == null) {
+      return false;
+    }
+    
+    String message = exception.getMessage();
+    if (message != null) {
+      String lowerMessage = message.toLowerCase();
+      return lowerMessage.contains("429") || 
+             lowerMessage.contains("too many requests") ||
+             lowerMessage.contains("rate limit");
+    }
+    
+    return false;
   }
 
   /**
