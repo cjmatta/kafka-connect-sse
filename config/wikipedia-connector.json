@@ -1,0 +1,16 @@
+{
+  "name": "wikipedia-sse-connector",
+  "config": {
+    "connector.class": "com.github.cjmatta.kafka.connect.sse.ServerSentEventsSourceConnector",
+    "tasks.max": "1",
+    "sse.uri": "https://stream.wikimedia.org/v2/stream/recentchange",
+    "topic": "wikipedia-changes",
+    "http.header.User-Agent": "KafkaConnectSSE-Testing/1.4 (https://github.com/cjmatta/kafka-connect-sse)",
+    "compression.enabled": "true",
+    "rate.limit.requests.per.second": "10",
+    "retry.backoff.initial.ms": "2000",
+    "retry.backoff.max.ms": "30000",
+    "retry.max.attempts": "10"
+  }
+}
+

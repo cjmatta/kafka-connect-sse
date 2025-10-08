@@ -21,7 +21,6 @@ CONNECTOR_NAME="Wikipedia SSE"
 TASKS_MAX="1"
 SSE_URI="https://stream.wikimedia.org/v2/stream/recentchange"
 TOPIC="wikimedia-raw"
-CONTACT_INFO="admin@example.com"
 COMPRESSION_ENABLED="true"
 
 # Dynamic plugin ID - will be set after upload
@@ -51,8 +50,6 @@ CONFIG_TEMPLATE='{
         "confluent.custom.connection.endpoints": "stream.wikimedia.org:443",
         "confluent.custom.schema.registry.auto": "true",
         "key.converter": "io.confluent.connect.json.JsonSchemaConverter",
-        "user.agent": "{{USER_AGENT}}",
-        "contact.info": "{{CONTACT_INFO}}",
         "compression.enabled": "{{COMPRESSION_ENABLED}}",
         "sse.uri": "{{SSE_URI}}",
         "topic": "{{TOPIC}}",
